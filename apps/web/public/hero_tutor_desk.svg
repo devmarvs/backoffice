@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Tutor desk illustration</title>
+  <desc id="desc">A stylized desk with a laptop, notebook, and coffee mug.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f6f1e8"/>
+      <stop offset="100%" stop-color="#efe4d2"/>
+    </linearGradient>
+    <linearGradient id="desk" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f2c57a"/>
+      <stop offset="100%" stop-color="#e07a5f"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f766e"/>
+      <stop offset="100%" stop-color="#1b9a8a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <circle cx="980" cy="120" r="90" fill="#f2c57a" opacity="0.35"/>
+  <circle cx="180" cy="140" r="70" fill="#0f766e" opacity="0.2"/>
+  <rect x="0" y="460" width="1200" height="220" fill="url(#desk)"/>
+  <rect x="140" y="360" width="520" height="200" rx="18" fill="#f9f5ef" stroke="#e5d8c4" stroke-width="4"/>
+  <rect x="180" y="400" width="360" height="110" rx="14" fill="url(#screen)"/>
+  <rect x="540" y="400" width="70" height="110" rx="12" fill="#f3efe6"/>
+  <rect x="560" y="420" width="30" height="10" rx="5" fill="#cbbba4"/>
+  <rect x="240" y="565" width="320" height="24" rx="12" fill="#1f1a16" opacity="0.2"/>
+  <rect x="720" y="360" width="210" height="140" rx="18" fill="#fffdfa" stroke="#e5d8c4" stroke-width="4"/>
+  <rect x="740" y="380" width="170" height="12" rx="6" fill="#0f766e" opacity="0.4"/>
+  <rect x="740" y="410" width="150" height="12" rx="6" fill="#0f766e" opacity="0.25"/>
+  <rect x="740" y="440" width="130" height="12" rx="6" fill="#0f766e" opacity="0.2"/>
+  <rect x="940" y="350" width="90" height="120" rx="12" fill="#f6f1e8" stroke="#e5d8c4" stroke-width="4"/>
+  <rect x="955" y="330" width="60" height="20" rx="8" fill="#e07a5f"/>
+  <circle cx="985" cy="410" r="22" fill="#f2c57a"/>
+  <rect x="120" y="520" width="960" height="18" rx="9" fill="#1f1a16" opacity="0.15"/>
+</svg>

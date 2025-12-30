@@ -1,0 +1,60 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+      args:
+        FRANKENPHP_IMAGE: ${FRANKENPHP_IMAGE:-dunglas/frankenphp:latest}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - ./apps/api:/app
+      - api_var:/app/var
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      APP_SECRET: ${APP_SECRET:-change_me}
+      DATABASE_URL: ${DATABASE_URL}
+      FOLLOW_UP_DAYS: ${FOLLOW_UP_DAYS:-3}
+      INVOICE_REMINDER_DAYS: ${INVOICE_REMINDER_DAYS:-7}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
+      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-}
+      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PORTAL_RETURN_URL: ${STRIPE_PORTAL_RETURN_URL:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-}
+      GOOGLE_SCOPES: ${GOOGLE_SCOPES:-}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
+      GOOGLE_SUCCESS_REDIRECT: ${GOOGLE_SUCCESS_REDIRECT:-}
+      GOOGLE_FAILURE_REDIRECT: ${GOOGLE_FAILURE_REDIRECT:-}
+    networks:
+      - default
+      - invokardex-net
+
+  web:
+    image: node:20-alpine
+    working_dir: /app
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    volumes:
+      - ./apps/web:/app
+      - web_node_modules:/app/node_modules
+    environment:
+      VITE_API_PROXY_TARGET: ${VITE_API_PROXY_TARGET:-http://api:8080}
+      CHOKIDAR_USEPOLLING: "true"
+    command: sh -c "npm install && npm run dev -- --host"
+    depends_on:
+      - api
+    networks:
+      - default
+
+volumes:
+  api_var:
+  web_node_modules:
+
+networks:
+  invokardex-net:
+    external: true
+    name: invokardex-net

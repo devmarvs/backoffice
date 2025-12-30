@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
+
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+# See also https://symfony.com/doc/current/service_container/import.html
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
+parameters:
+    app.follow_up_days: '%env(int:FOLLOW_UP_DAYS)%'
+    app.invoice_reminder_days: '%env(int:INVOICE_REMINDER_DAYS)%'
+    app.stripe_secret_key: '%env(STRIPE_SECRET_KEY)%'
+    app.stripe_price_id: '%env(STRIPE_PRICE_ID)%'
+    app.stripe_success_url: '%env(STRIPE_SUCCESS_URL)%'
+    app.stripe_cancel_url: '%env(STRIPE_CANCEL_URL)%'
+    app.stripe_webhook_secret: '%env(STRIPE_WEBHOOK_SECRET)%'
+    app.stripe_portal_return_url: '%env(STRIPE_PORTAL_RETURN_URL)%'
+    app.google_client_id: '%env(GOOGLE_CLIENT_ID)%'
+    app.google_client_secret: '%env(GOOGLE_CLIENT_SECRET)%'
+    app.google_redirect_url: '%env(GOOGLE_REDIRECT_URL)%'
+    app.google_scopes: '%env(GOOGLE_SCOPES)%'
+    app.google_calendar_id: '%env(GOOGLE_CALENDAR_ID)%'
+    app.google_success_redirect: '%env(GOOGLE_SUCCESS_REDIRECT)%'
+    app.google_failure_redirect: '%env(GOOGLE_FAILURE_REDIRECT)%'
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones
+
+    App\Domain\Repository\UserRepositoryInterface: '@App\Infrastructure\Repository\DbalUserRepository'
+    App\Domain\Repository\ClientRepositoryInterface: '@App\Infrastructure\Repository\DbalClientRepository'
+    App\Domain\Repository\WorkEventRepositoryInterface: '@App\Infrastructure\Repository\DbalWorkEventRepository'
+    App\Domain\Repository\PackageRepositoryInterface: '@App\Infrastructure\Repository\DbalPackageRepository'
+    App\Domain\Repository\InvoiceDraftRepositoryInterface: '@App\Infrastructure\Repository\DbalInvoiceDraftRepository'
+    App\Domain\Repository\FollowUpRepositoryInterface: '@App\Infrastructure\Repository\DbalFollowUpRepository'
+    App\Domain\Repository\UserSettingsRepositoryInterface: '@App\Infrastructure\Repository\DbalUserSettingsRepository'
+    App\Domain\Repository\MessageTemplateRepositoryInterface: '@App\Infrastructure\Repository\DbalMessageTemplateRepository'
+    App\Domain\Repository\BillingSubscriptionRepositoryInterface: '@App\Infrastructure\Repository\DbalBillingSubscriptionRepository'
+    App\Domain\Repository\PaymentLinkRepositoryInterface: '@App\Infrastructure\Repository\DbalPaymentLinkRepository'
+    App\Domain\Repository\IntegrationRepositoryInterface: '@App\Infrastructure\Repository\DbalIntegrationRepository'
+    App\Domain\Repository\CalendarEventRepositoryInterface: '@App\Infrastructure\Repository\DbalCalendarEventRepository'
+    App\Domain\Repository\ReferralRepositoryInterface: '@App\Infrastructure\Repository\DbalReferralRepository'
