@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   connectGoogle,
+  confirmPayPalSubscription,
   disconnectGoogle,
   fetchBillingStatus,
+  fetchPayPalStatus,
   fetchCalendarEvents,
   fetchReferrals,
   fetchSettings,
@@ -11,6 +14,8 @@ import {
   runReminders,
   startBillingPortal,
   startCheckout,
+  startPayPalCheckout,
+  startPayPalManage,
   syncGoogleCalendar,
   updateSettings,
   updateTemplate,
@@ -24,6 +29,8 @@ const templateLabels = {
 }
 
 export function SettingsPage() {
+  const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
     businessType: '',
@@ -37,6 +44,7 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [showCalendar, setShowCalendar] = useState(false)
+  const [handledPayPal, setHandledPayPal] = useState(false)
 
   const settingsQuery = useQuery({
     queryKey: ['settings'],
@@ -49,6 +57,10 @@ export function SettingsPage() {
   const billingQuery = useQuery({
     queryKey: ['billing-status'],
     queryFn: fetchBillingStatus,
+  })
+  const paypalStatusQuery = useQuery({
+    queryKey: ['billing-status', 'paypal'],
+    queryFn: fetchPayPalStatus,
   })
   const referralsQuery = useQuery({
     queryKey: ['referrals'],
@@ -156,6 +168,41 @@ export function SettingsPage() {
     },
   })
 
+  const paypalCheckoutMutation = useMutation({
+    mutationFn: startPayPalCheckout,
+    onSuccess: (result) => {
+      window.location.href = result.url
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'PayPal checkout is not configured yet.')
+      setSuccess(null)
+    },
+  })
+
+  const paypalManageMutation = useMutation({
+    mutationFn: startPayPalManage,
+    onSuccess: (result) => {
+      window.location.href = result.url
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'PayPal management is not available yet.')
+      setSuccess(null)
+    },
+  })
+
+  const paypalConfirmMutation = useMutation({
+    mutationFn: confirmPayPalSubscription,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['billing-status', 'paypal'] })
+      setSuccess('PayPal subscription confirmed.')
+      setError(null)
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'PayPal confirmation failed.')
+      setSuccess(null)
+    },
+  })
+
   const connectMutation = useMutation({
     mutationFn: connectGoogle,
     onSuccess: (result) => {
@@ -196,6 +243,29 @@ export function SettingsPage() {
   const referralCode = referralsQuery.data?.code.code
   const referralCount = referralsQuery.data?.referrals.length || 0
   const referralRows = useMemo(() => referralsQuery.data?.referrals ?? [], [referralsQuery.data])
+
+  useEffect(() => {
+    if (handledPayPal) {
+      return
+    }
+    const params = new URLSearchParams(location.search)
+    const subscriptionId = params.get('subscription_id')
+    const status = params.get('paypal')
+
+    if (subscriptionId) {
+      setHandledPayPal(true)
+      paypalConfirmMutation.mutate(subscriptionId, {
+        onSettled: () => navigate('/app/settings', { replace: true }),
+      })
+      return
+    }
+
+    if (status === 'cancel') {
+      setHandledPayPal(true)
+      setError('PayPal checkout was cancelled.')
+      navigate('/app/settings', { replace: true })
+    }
+  }, [handledPayPal, location.search, navigate, paypalConfirmMutation])
 
   return (
     <div className="page">
@@ -401,29 +471,63 @@ export function SettingsPage() {
         <div className="card">
           <div className="card-header">
             <h3>Billing</h3>
-            <span className="chip">Stripe</span>
+            <span className="chip">Providers</span>
           </div>
-          <p className="muted">
-            Status: {billingQuery.data?.status ? billingQuery.data.status : 'unknown'}
-          </p>
-          {billingQuery.data?.current_period_end ? (
-            <p className="muted">Renews: {new Date(billingQuery.data.current_period_end).toLocaleDateString()}</p>
-          ) : null}
-          <div className="stack">
-            <button
-              className="button button--primary"
-              type="button"
-              onClick={() => checkoutMutation.mutate()}
-            >
-              {checkoutMutation.isPending ? 'Redirecting...' : 'Start Stripe checkout'}
-            </button>
-            <button
-              className="button button--ghost"
-              type="button"
-              onClick={() => portalMutation.mutate()}
-            >
-              {portalMutation.isPending ? 'Opening...' : 'Manage subscription'}
-            </button>
+          <div className="grid two-columns">
+            <div className="billing-provider">
+              <p className="eyebrow">Stripe</p>
+              <p className="muted">
+                Status: {billingQuery.data?.status ? billingQuery.data.status : 'unknown'}
+              </p>
+              {billingQuery.data?.current_period_end ? (
+                <p className="muted">
+                  Renews: {new Date(billingQuery.data.current_period_end).toLocaleDateString()}
+                </p>
+              ) : null}
+              <div className="stack">
+                <button
+                  className="button button--primary"
+                  type="button"
+                  onClick={() => checkoutMutation.mutate()}
+                >
+                  {checkoutMutation.isPending ? 'Redirecting...' : 'Start Stripe checkout'}
+                </button>
+                <button
+                  className="button button--ghost"
+                  type="button"
+                  onClick={() => portalMutation.mutate()}
+                >
+                  {portalMutation.isPending ? 'Opening...' : 'Manage subscription'}
+                </button>
+              </div>
+            </div>
+            <div className="billing-provider">
+              <p className="eyebrow">PayPal</p>
+              <p className="muted">
+                Status: {paypalStatusQuery.data?.status ? paypalStatusQuery.data.status : 'unknown'}
+              </p>
+              {paypalStatusQuery.data?.current_period_end ? (
+                <p className="muted">
+                  Renews: {new Date(paypalStatusQuery.data.current_period_end).toLocaleDateString()}
+                </p>
+              ) : null}
+              <div className="stack">
+                <button
+                  className="button button--primary"
+                  type="button"
+                  onClick={() => paypalCheckoutMutation.mutate()}
+                >
+                  {paypalCheckoutMutation.isPending ? 'Redirecting...' : 'Start PayPal checkout'}
+                </button>
+                <button
+                  className="button button--ghost"
+                  type="button"
+                  onClick={() => paypalManageMutation.mutate()}
+                >
+                  {paypalManageMutation.isPending ? 'Opening...' : 'Manage PayPal subscription'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -415,6 +415,27 @@ export async function startBillingPortal() {
   return apiFetch<{ url: string }>(`/api/billing/portal`, { method: 'POST' })
 }
 
+export async function fetchPayPalStatus() {
+  return apiFetch<BillingStatus>(`/api/billing/paypal/status`)
+}
+
+export async function startPayPalCheckout() {
+  return apiFetch<{ url: string; subscription_id: string }>(`/api/billing/paypal/checkout`, {
+    method: 'POST',
+  })
+}
+
+export async function confirmPayPalSubscription(subscriptionId: string) {
+  return apiFetch<BillingStatus>(`/api/billing/paypal/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ subscription_id: subscriptionId }),
+  })
+}
+
+export async function startPayPalManage() {
+  return apiFetch<{ url: string }>(`/api/billing/paypal/manage`, { method: 'POST' })
+}
+
 export async function connectGoogle() {
   return apiFetch<{ url: string }>(`/api/integrations/google/connect`)
 }

@@ -6,6 +6,7 @@ namespace App\Controller\Api;
 
 use App\Domain\Repository\BillingSubscriptionRepositoryInterface;
 use App\Domain\Repository\UserRepositoryInterface;
+use App\Infrastructure\Billing\PayPalBillingService;
 use App\Infrastructure\Billing\StripeBillingService;
 use DateTimeImmutable;
 use JsonException;
@@ -85,6 +86,108 @@ final class BillingController extends BaseApiController
         $session = $stripe->createPortalSession((string) $customerId);
 
         return $this->jsonSuccess(['url' => $session['url']]);
+    }
+
+    #[Route('/paypal/checkout', methods: ['POST'])]
+    public function paypalCheckout(
+        Request $request,
+        PayPalBillingService $paypal,
+        BillingSubscriptionRepositoryInterface $subscriptions
+    ): JsonResponse {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$paypal->isConfigured()) {
+            return $this->jsonError('not_configured', 'PayPal is not configured.', 409);
+        }
+
+        $session = $paypal->createSubscription($userId);
+        $subscriptions->upsert($userId, 'paypal', [
+            'subscription_id' => $session['id'],
+            'status' => 'pending',
+        ]);
+
+        return $this->jsonSuccess(['url' => $session['approve_url'], 'subscription_id' => $session['id']]);
+    }
+
+    #[Route('/paypal/status', methods: ['GET'])]
+    public function paypalStatus(
+        Request $request,
+        BillingSubscriptionRepositoryInterface $subscriptions
+    ): JsonResponse {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        $subscription = $subscriptions->findByUser($userId, 'paypal');
+        if ($subscription !== null) {
+            $subscription = $this->normalizeDates($subscription, ['created_at', 'updated_at', 'current_period_end']);
+        }
+
+        return $this->jsonSuccess($subscription ?? ['status' => 'inactive']);
+    }
+
+    #[Route('/paypal/confirm', methods: ['POST'])]
+    public function paypalConfirm(
+        Request $request,
+        PayPalBillingService $paypal,
+        BillingSubscriptionRepositoryInterface $subscriptions
+    ): JsonResponse {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        try {
+            $payload = $this->parseJson($request);
+        } catch (JsonException $exception) {
+            return $this->jsonError('invalid_json', $exception->getMessage(), 400);
+        }
+
+        $subscriptionId = isset($payload['subscription_id']) ? trim((string) $payload['subscription_id']) : '';
+        if ($subscriptionId === '') {
+            return $this->jsonError('invalid_subscription', 'subscription_id is required.', 422);
+        }
+
+        if (!$paypal->isConfigured()) {
+            return $this->jsonError('not_configured', 'PayPal is not configured.', 409);
+        }
+
+        $data = $paypal->getSubscription($subscriptionId);
+        $status = strtolower((string) ($data['status'] ?? 'pending'));
+        $payerId = $data['subscriber']['payer_id'] ?? null;
+        $nextBilling = $data['billing_info']['next_billing_time'] ?? null;
+
+        $row = $subscriptions->upsert($userId, 'paypal', [
+            'customer_id' => $payerId,
+            'subscription_id' => $subscriptionId,
+            'status' => $status,
+            'current_period_end' => $nextBilling,
+        ]);
+
+        $row = $this->normalizeDates($row, ['created_at', 'updated_at', 'current_period_end']);
+
+        return $this->jsonSuccess($row);
+    }
+
+    #[Route('/paypal/manage', methods: ['POST'])]
+    public function paypalManage(
+        Request $request,
+        PayPalBillingService $paypal
+    ): JsonResponse {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$paypal->isManageConfigured()) {
+            return $this->jsonError('not_configured', 'PayPal manage URL is not configured.', 409);
+        }
+
+        return $this->jsonSuccess(['url' => $paypal->getManageUrl()]);
     }
 
     #[Route('/webhook', methods: ['POST'])]

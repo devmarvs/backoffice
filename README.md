@@ -77,6 +77,17 @@ Stripe checkout (subscriptions + payment links):
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PORTAL_RETURN_URL`
 
+PayPal subscriptions:
+
+- `PAYPAL_CLIENT_ID`
+- `PAYPAL_CLIENT_SECRET`
+- `PAYPAL_PLAN_ID`
+- `PAYPAL_ENV` (`sandbox` or `live`)
+- `PAYPAL_SUCCESS_URL`
+- `PAYPAL_CANCEL_URL`
+- `PAYPAL_MANAGE_URL` (optional: defaults to the PayPal autopay page)
+- `PAYPAL_BRAND_NAME` (optional)
+
 Google Calendar (read-only import):
 
 - `GOOGLE_CLIENT_ID`

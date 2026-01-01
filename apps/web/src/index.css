@@ -538,6 +538,16 @@ textarea {
   gap: 0.8rem;
 }
 
+.billing-provider {
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.65);
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
 .referral-row {
   display: flex;
   gap: 0.6rem;

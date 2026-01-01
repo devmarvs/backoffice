@@ -5,6 +5,6 @@ WORKDIR /app
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-RUN install-php-extensions pdo_pgsql gd mbstring
+RUN install-php-extensions pdo_pgsql gd mbstring curl
 
 COPY ./docker/api/Caddyfile /etc/caddy/Caddyfile
