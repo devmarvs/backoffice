@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Billing;
 
+use App\Infrastructure\Http\CurlHttpClient;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final class PayPalBillingService
@@ -11,6 +12,7 @@ final class PayPalBillingService
     private const DEFAULT_BRAND = 'BackOffice Autopilot';
 
     public function __construct(
+        private CurlHttpClient $http,
         #[Autowire('%app.paypal_client_id%')] private string $clientId,
         #[Autowire('%app.paypal_client_secret%')] private string $clientSecret,
         #[Autowire('%app.paypal_plan_id%')] private string $planId,
@@ -103,40 +105,15 @@ final class PayPalBillingService
             'Content-Type: application/json',
             'Authorization: Bearer ' . $token,
         ];
+        $body = $payload !== null ? json_encode($payload, JSON_THROW_ON_ERROR) : null;
 
-        $ch = curl_init($url);
-        if ($ch === false) {
-            throw new \RuntimeException('Unable to initialize PayPal request.');
-        }
-
-        $options = [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_HTTPHEADER => $headers,
-        ];
-
-        if ($payload !== null) {
-            $options[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_THROW_ON_ERROR);
-        }
-
-        curl_setopt_array($ch, $options);
-
-        $response = curl_exec($ch);
-        if ($response === false) {
-            $error = curl_error($ch);
-            curl_close($ch);
-            throw new \RuntimeException('PayPal request failed: ' . $error);
-        }
-
-        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $data = json_decode($response, true);
+        $response = $this->http->request($method, $url, $headers, $body);
+        $data = json_decode($response['body'], true);
         if (!is_array($data)) {
             $data = [];
         }
 
-        if ($status >= 400) {
+        if ($response['status'] >= 400) {
             $message = $data['message'] ?? 'PayPal request failed.';
             throw new \RuntimeException($message);
         }
@@ -147,43 +124,34 @@ final class PayPalBillingService
     private function requestToken(): string
     {
         $url = $this->baseUrl() . '/v1/oauth2/token';
+        $credentials = base64_encode($this->clientId . ':' . $this->clientSecret);
 
-        $ch = curl_init($url);
-        if ($ch === false) {
-            throw new \RuntimeException('Unable to initialize PayPal token request.');
-        }
-
-        $options = [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => 'grant_type=client_credentials',
-            CURLOPT_USERPWD => $this->clientId . ':' . $this->clientSecret,
-            CURLOPT_HTTPHEADER => [
-                'Accept: application/json',
-                'Accept-Language: en_US',
-            ],
+        $headers = [
+            'Accept: application/json',
+            'Accept-Language: en_US',
+            'Content-Type: application/x-www-form-urlencoded',
+            'Authorization: Basic ' . $credentials,
         ];
 
-        curl_setopt_array($ch, $options);
+        $response = $this->http->request(
+            'POST',
+            $url,
+            $headers,
+            'grant_type=client_credentials'
+        );
 
-        $response = curl_exec($ch);
-        if ($response === false) {
-            $error = curl_error($ch);
-            curl_close($ch);
-            throw new \RuntimeException('PayPal auth failed: ' . $error);
+        $data = json_decode($response['body'], true);
+        if (!is_array($data)) {
+            $data = [];
         }
 
-        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $data = json_decode($response, true);
-        if (!is_array($data) || !isset($data['access_token'])) {
-            throw new \RuntimeException('PayPal access token missing.');
-        }
-
-        if ($status >= 400) {
+        if ($response['status'] >= 400) {
             $message = $data['error_description'] ?? 'PayPal auth failed.';
             throw new \RuntimeException($message);
+        }
+
+        if (!isset($data['access_token'])) {
+            throw new \RuntimeException('PayPal access token missing.');
         }
 
         return (string) $data['access_token'];
