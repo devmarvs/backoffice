@@ -96,6 +96,97 @@ export function LandingPage() {
         </div>
       </section>
 
+      <section>
+        <div className="landing-section-title">
+          <p className="eyebrow">Results</p>
+          <h2>Real Impact for Tutors</h2>
+          <p className="muted">See how BackOffice Autopilot transforms your workflow.</p>
+        </div>
+        <div className="stats-section">
+          {/* Bar Chart - Hours Saved */}
+          <div className="chart-card">
+            <h3>Hours Saved Per Week</h3>
+            <div className="bar-chart">
+              <div className="bar-item">
+                <div className="bar-label">
+                  <span>Before</span>
+                  <span className="muted">4+ hours</span>
+                </div>
+                <div className="bar-track">
+                  <div className="bar-fill bar-fill--before" style={{ width: '100%' }} />
+                </div>
+              </div>
+              <div className="bar-item">
+                <div className="bar-label">
+                  <span>After</span>
+                  <span style={{ color: 'var(--accent)' }}>30 min</span>
+                </div>
+                <div className="bar-track">
+                  <div className="bar-fill" style={{ width: '12%' }} />
+                </div>
+              </div>
+            </div>
+            <div className="chart-stat">
+              <span className="chart-stat-value">87%</span>
+              <span className="chart-stat-label">less admin time</span>
+            </div>
+          </div>
+
+          {/* Donut Chart - Tasks Automated */}
+          <div className="chart-card">
+            <h3>Tasks Automated</h3>
+            <div className="donut-container">
+              <div className="donut-chart" />
+              <div className="donut-legend">
+                <div className="legend-item">
+                  <span className="legend-dot legend-dot--invoices" />
+                  <span>Invoices (50%)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-dot legend-dot--followups" />
+                  <span>Follow-ups (25%)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-dot legend-dot--tracking" />
+                  <span>Tracking (25%)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Line Chart - Revenue Growth */}
+          <div className="chart-card">
+            <h3>Revenue Growth</h3>
+            <div className="line-chart-container">
+              <svg className="line-chart-svg" viewBox="0 0 200 80" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#1e3a8a" />
+                    <stop offset="100%" stopColor="#3b82f6" />
+                  </linearGradient>
+                  <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path
+                  className="line-chart-area"
+                  d="M0,70 Q30,65 50,55 T100,40 T150,25 T200,10 L200,80 L0,80 Z"
+                />
+                <path
+                  className="line-chart-path"
+                  d="M0,70 Q30,65 50,55 T100,40 T150,25 T200,10"
+                />
+              </svg>
+            </div>
+            <div className="chart-stat">
+              <span className="chart-stat-value">+32%</span>
+              <span className="chart-stat-label">avg. revenue increase</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="landing-grid">
         <div className="card">
           <h3>Capture Work Events</h3>
