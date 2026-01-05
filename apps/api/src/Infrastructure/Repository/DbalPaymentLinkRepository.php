@@ -57,4 +57,56 @@ final class DbalPaymentLinkRepository implements PaymentLinkRepositoryInterface
             ]
         );
     }
+
+    public function findByProviderId(string $provider, string $providerId): ?array
+    {
+        $row = $this->connection->fetchAssociative(
+            'SELECT id, invoice_draft_id, provider, provider_id, url, status, created_at, updated_at
+             FROM payment_links
+             WHERE provider = :provider AND provider_id = :provider_id
+             ORDER BY created_at DESC
+             LIMIT 1',
+            [
+                'provider' => $provider,
+                'provider_id' => $providerId,
+            ]
+        );
+
+        return $row ?: null;
+    }
+
+    public function findWithInvoiceByProviderId(string $provider, string $providerId): ?array
+    {
+        $row = $this->connection->fetchAssociative(
+            'SELECT pl.id, pl.invoice_draft_id, pl.provider, pl.provider_id, pl.url, pl.status,
+                    pl.created_at, pl.updated_at, d.user_id, d.status AS invoice_status
+             FROM payment_links pl
+             INNER JOIN invoice_drafts d ON d.id = pl.invoice_draft_id
+             WHERE pl.provider = :provider AND pl.provider_id = :provider_id
+             ORDER BY pl.created_at DESC
+             LIMIT 1',
+            [
+                'provider' => $provider,
+                'provider_id' => $providerId,
+            ]
+        );
+
+        return $row ?: null;
+    }
+
+    public function updateStatus(int $paymentLinkId, string $status): ?array
+    {
+        $row = $this->connection->fetchAssociative(
+            'UPDATE payment_links
+             SET status = :status, updated_at = NOW()
+             WHERE id = :id
+             RETURNING id, invoice_draft_id, provider, provider_id, url, status, created_at, updated_at',
+            [
+                'status' => $status,
+                'id' => $paymentLinkId,
+            ]
+        );
+
+        return $row ?: null;
+    }
 }

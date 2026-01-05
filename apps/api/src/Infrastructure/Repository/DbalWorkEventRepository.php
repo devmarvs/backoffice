@@ -17,9 +17,9 @@ final class DbalWorkEventRepository implements WorkEventRepositoryInterface
     public function create(array $data): array
     {
         $row = $this->connection->fetchAssociative(
-            'INSERT INTO work_events (user_id, client_id, type, start_at, duration_minutes, billable, notes)
-             VALUES (:user_id, :client_id, :type, :start_at, :duration_minutes, :billable, :notes)
-             RETURNING id, user_id, client_id, type, start_at, duration_minutes, billable, notes, created_at',
+            'INSERT INTO work_events (user_id, client_id, type, start_at, duration_minutes, billable, notes, source_type, source_id)
+             VALUES (:user_id, :client_id, :type, :start_at, :duration_minutes, :billable, :notes, :source_type, :source_id)
+             RETURNING id, user_id, client_id, type, start_at, duration_minutes, billable, notes, source_type, source_id, created_at',
             [
                 'user_id' => $data['user_id'],
                 'client_id' => $data['client_id'],
@@ -28,6 +28,8 @@ final class DbalWorkEventRepository implements WorkEventRepositoryInterface
                 'duration_minutes' => $data['duration_minutes'],
                 'billable' => $data['billable'],
                 'notes' => $data['notes'],
+                'source_type' => $data['source_type'] ?? null,
+                'source_id' => $data['source_id'] ?? null,
             ]
         );
 

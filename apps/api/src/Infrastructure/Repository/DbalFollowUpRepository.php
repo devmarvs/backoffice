@@ -115,4 +115,19 @@ final class DbalFollowUpRepository implements FollowUpRepositoryInterface
 
         return $this->connection->fetchAllAssociative($sql, $params);
     }
+
+    public function findById(int $userId, int $followUpId): ?array
+    {
+        $row = $this->connection->fetchAssociative(
+            'SELECT id, user_id, client_id, due_at, suggested_message, status, source_type, source_id, created_at, updated_at
+             FROM follow_ups
+             WHERE id = :id AND user_id = :user_id',
+            [
+                'id' => $followUpId,
+                'user_id' => $userId,
+            ]
+        );
+
+        return $row ?: null;
+    }
 }

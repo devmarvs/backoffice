@@ -29,10 +29,11 @@ final class SettingsController extends BaseApiController
                 'default_currency' => 'EUR',
                 'follow_up_days' => null,
                 'invoice_reminder_days' => null,
+                'last_reminder_run_at' => null,
             ]);
         }
 
-        $row = $this->normalizeDates($row, ['created_at', 'updated_at']);
+        $row = $this->normalizeDates($row, ['created_at', 'updated_at', 'last_reminder_run_at']);
 
         return $this->jsonSuccess($row);
     }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Controller\Api;
 
 use App\Application\Billing\InvoicePdfRenderer;
+use App\Domain\Repository\AuditLogRepositoryInterface;
+use App\Infrastructure\Mail\SimpleMailer;
 use App\Infrastructure\Billing\StripeBillingService;
 use App\Domain\Enum\InvoiceDraftStatus;
 use App\Domain\Repository\ClientRepositoryInterface;
@@ -125,6 +127,8 @@ final class InvoiceDraftController extends BaseApiController
     public function markPaid(
         Request $request,
         InvoiceDraftRepositoryInterface $drafts,
+        PaymentLinkRepositoryInterface $links,
+        AuditLogRepositoryInterface $auditLogs,
         int $id
     ): JsonResponse
     {
@@ -138,6 +142,9 @@ final class InvoiceDraftController extends BaseApiController
             return $this->jsonError('not_found', 'Invoice draft not found.', 404);
         }
 
+        $links->deactivateByInvoiceDraft($id);
+        $auditLogs->add($userId, 'invoice.paid', 'invoice_draft', $id, ['status' => InvoiceDraftStatus::Paid->value]);
+
         $draft = $this->normalizeDates($draft, ['created_at', 'updated_at']);
 
         return $this->jsonSuccess($draft);
@@ -147,6 +154,7 @@ final class InvoiceDraftController extends BaseApiController
     public function markSent(
         Request $request,
         InvoiceDraftRepositoryInterface $drafts,
+        AuditLogRepositoryInterface $auditLogs,
         int $id
     ): JsonResponse
     {
@@ -160,6 +168,8 @@ final class InvoiceDraftController extends BaseApiController
             return $this->jsonError('not_found', 'Invoice draft not found.', 404);
         }
 
+        $auditLogs->add($userId, 'invoice.sent', 'invoice_draft', $id, ['status' => InvoiceDraftStatus::Sent->value]);
+
         $draft = $this->normalizeDates($draft, ['created_at', 'updated_at']);
 
         return $this->jsonSuccess($draft);
@@ -169,6 +179,8 @@ final class InvoiceDraftController extends BaseApiController
     public function void(
         Request $request,
         InvoiceDraftRepositoryInterface $drafts,
+        PaymentLinkRepositoryInterface $links,
+        AuditLogRepositoryInterface $auditLogs,
         int $id
     ): JsonResponse
     {
@@ -194,9 +206,95 @@ final class InvoiceDraftController extends BaseApiController
             return $this->jsonError('not_found', 'Invoice draft not found.', 404);
         }
 
+        $links->deactivateByInvoiceDraft($id);
+        $auditLogs->add($userId, 'invoice.voided', 'invoice_draft', $id, ['status' => InvoiceDraftStatus::Void->value]);
+
         $draft = $this->normalizeDates($draft, ['created_at', 'updated_at']);
 
         return $this->jsonSuccess($draft);
+    }
+
+    #[Route('/{id}/email', methods: ['POST'])]
+    public function email(
+        Request $request,
+        InvoiceDraftRepositoryInterface $drafts,
+        ClientRepositoryInterface $clients,
+        InvoicePdfRenderer $renderer,
+        SimpleMailer $mailer,
+        AuditLogRepositoryInterface $auditLogs,
+        int $id
+    ): JsonResponse
+    {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        $draft = $drafts->findById($userId, $id);
+        if ($draft === null) {
+            return $this->jsonError('not_found', 'Invoice draft not found.', 404);
+        }
+
+        if (in_array($draft['status'] ?? null, [InvoiceDraftStatus::Paid->value, InvoiceDraftStatus::Void->value], true)) {
+            return $this->jsonError('invalid_status', 'Paid or void invoices cannot be emailed.', 409);
+        }
+
+        $client = $clients->findById($userId, (int) $draft['client_id']);
+        if ($client === null) {
+            return $this->jsonError('not_found', 'Client not found.', 404);
+        }
+
+        $email = isset($client['email']) ? trim((string) $client['email']) : '';
+        if ($email === '') {
+            return $this->jsonError('missing_email', 'Client email is required to send.', 409);
+        }
+
+        try {
+            $payload = $this->parseJson($request);
+        } catch (JsonException $exception) {
+            return $this->jsonError('invalid_json', $exception->getMessage(), 400);
+        }
+
+        $subject = isset($payload['subject']) ? trim((string) $payload['subject']) : '';
+        if ($subject === '') {
+            $subject = sprintf('Invoice #%d', (int) $draft['id']);
+        }
+
+        $message = isset($payload['message']) ? trim((string) $payload['message']) : '';
+        if ($message === '') {
+            $name = $client['name'] ?? 'there';
+            $amount = sprintf('%s %.2f', $draft['currency'], ((int) $draft['amount_cents']) / 100);
+            $message = sprintf(
+                "Hi %s,\n\nAttached is invoice #%d for %s.\n\nThanks,\nBackOffice Autopilot",
+                $name,
+                (int) $draft['id'],
+                $amount
+            );
+        }
+
+        if (!$mailer->isConfigured()) {
+            return $this->jsonError('not_configured', 'Mail sender is not configured.', 409);
+        }
+
+        $lines = $drafts->findLines((int) $draft['id']);
+        $pdf = $renderer->render($draft, $client, $lines);
+        $filename = sprintf('invoice-%d.pdf', (int) $draft['id']);
+
+        try {
+            $mailer->send($email, $subject, $message, $filename, $pdf, 'application/pdf');
+        } catch (\Throwable $exception) {
+            return $this->jsonError('email_failed', $exception->getMessage(), 500);
+        }
+
+        if (($draft['status'] ?? null) === InvoiceDraftStatus::Draft->value) {
+            $draft = $drafts->updateStatus($userId, $id, InvoiceDraftStatus::Sent->value) ?? $draft;
+        }
+
+        $auditLogs->add($userId, 'invoice.emailed', 'invoice_draft', $id, ['to' => $email]);
+
+        $draft = $this->normalizeDates($draft, ['created_at', 'updated_at']);
+
+        return $this->jsonSuccess(['sent' => true, 'invoice' => $draft]);
     }
 
     #[Route('/{id}/pdf', methods: ['GET'])]

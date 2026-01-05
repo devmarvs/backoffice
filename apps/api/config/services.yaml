@@ -30,6 +30,9 @@ parameters:
     app.google_calendar_id: '%env(GOOGLE_CALENDAR_ID)%'
     app.google_success_redirect: '%env(GOOGLE_SUCCESS_REDIRECT)%'
     app.google_failure_redirect: '%env(GOOGLE_FAILURE_REDIRECT)%'
+    app.mail_from: '%env(default::MAIL_FROM)%'
+    app.mail_reply_to: '%env(default::MAIL_REPLY_TO)%'
+    app.mail_bcc: '%env(default::MAIL_BCC)%'
 
 services:
     # default configuration for services in *this* file
@@ -56,6 +59,7 @@ services:
     App\Domain\Repository\BillingSubscriptionRepositoryInterface: '@App\Infrastructure\Repository\DbalBillingSubscriptionRepository'
     App\Domain\Repository\BillingWebhookEventRepositoryInterface: '@App\Infrastructure\Repository\DbalBillingWebhookEventRepository'
     App\Domain\Repository\PaymentLinkRepositoryInterface: '@App\Infrastructure\Repository\DbalPaymentLinkRepository'
+    App\Domain\Repository\AuditLogRepositoryInterface: '@App\Infrastructure\Repository\DbalAuditLogRepository'
     App\Domain\Repository\IntegrationRepositoryInterface: '@App\Infrastructure\Repository\DbalIntegrationRepository'
     App\Domain\Repository\CalendarEventRepositoryInterface: '@App\Infrastructure\Repository\DbalCalendarEventRepository'
     App\Domain\Repository\ReferralRepositoryInterface: '@App\Infrastructure\Repository\DbalReferralRepository'

@@ -3,14 +3,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   dismissFollowUp,
   fetchClients,
+  fetchCalendarSuggestions,
   fetchFollowUps,
   fetchInvoiceDrafts,
   fetchPackages,
+  logWorkEventFromCalendar,
   markFollowUpDone,
   reopenFollowUp,
+  sendFollowUpEmail,
   voiceLogWorkEvent,
 } from '../api/client'
 import { useQuickLogStore } from '../state/quickLogStore'
+
+const toDateInput = (date: Date) => date.toISOString().slice(0, 10)
 
 export function TodayPage() {
   const openQuickLog = useQuickLogStore((state) => state.open)
@@ -33,6 +38,13 @@ export function TodayPage() {
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const [voiceDuration, setVoiceDuration] = useState('')
   const [voiceError, setVoiceError] = useState<string | null>(null)
+  const [followUpFrom, setFollowUpFrom] = useState('')
+  const [followUpTo, setFollowUpTo] = useState('')
+  const [suggestionClientId, setSuggestionClientId] = useState<number | null>(null)
+  const [suggestionFrom, setSuggestionFrom] = useState(() => toDateInput(new Date()))
+  const [suggestionTo, setSuggestionTo] = useState(() =>
+    toDateInput(new Date(Date.now() + 7 * 86400000))
+  )
 
   useEffect(() => {
     if (!packageClientId && clientsQuery.data && clientsQuery.data.length > 0) {
@@ -41,7 +53,15 @@ export function TodayPage() {
     if (!voiceClientId && clientsQuery.data && clientsQuery.data.length > 0) {
       setVoiceClientId(clientsQuery.data[0].id)
     }
-  }, [clientsQuery.data, packageClientId, voiceClientId])
+    if (!suggestionClientId && clientsQuery.data && clientsQuery.data.length > 0) {
+      setSuggestionClientId(clientsQuery.data[0].id)
+    }
+  }, [clientsQuery.data, packageClientId, voiceClientId, suggestionClientId])
+
+  const suggestionsQuery = useQuery({
+    queryKey: ['calendar-suggestions', suggestionFrom, suggestionTo],
+    queryFn: () => fetchCalendarSuggestions({ from: suggestionFrom, to: suggestionTo }),
+  })
 
   const packagesQuery = useQuery({
     queryKey: ['packages', packageClientId],
@@ -67,6 +87,24 @@ export function TodayPage() {
     mutationFn: reopenFollowUp,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['follow-ups'] })
+    },
+  })
+
+  const followUpEmailMutation = useMutation({
+    mutationFn: sendFollowUpEmail,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['follow-ups'] })
+    },
+  })
+
+  const suggestionLogMutation = useMutation({
+    mutationFn: ({ id, clientId }: { id: number; clientId: number }) =>
+      logWorkEventFromCalendar(id, { client_id: clientId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['calendar-suggestions'] })
+      queryClient.invalidateQueries({ queryKey: ['invoice-drafts'] })
+      queryClient.invalidateQueries({ queryKey: ['follow-ups'] })
+      queryClient.invalidateQueries({ queryKey: ['work-events'] })
     },
   })
 
@@ -155,13 +193,34 @@ export function TodayPage() {
               <button
                 className="button button--ghost"
                 type="button"
-                onClick={() =>
-                  window.open(`/api/follow-ups/export?status=${followUpStatus}`, '_blank', 'noopener')
-                }
+                onClick={() => {
+                  const params = new URLSearchParams({ status: followUpStatus })
+                  if (followUpFrom) params.set('from', followUpFrom)
+                  if (followUpTo) params.set('to', followUpTo)
+                  window.open(`/api/follow-ups/export?${params.toString()}`, '_blank', 'noopener')
+                }}
               >
                 Export CSV
               </button>
             </div>
+          </div>
+          <div className="grid two-columns">
+            <label className="field">
+              <span>From</span>
+              <input
+                type="date"
+                value={followUpFrom}
+                onChange={(event) => setFollowUpFrom(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>To</span>
+              <input
+                type="date"
+                value={followUpTo}
+                onChange={(event) => setFollowUpTo(event.target.value)}
+              />
+            </label>
           </div>
           {followUpQuery.isLoading ? (
             <p className="muted">Loading follow-ups...</p>
@@ -192,6 +251,13 @@ export function TodayPage() {
                           onClick={() => followUpDismissMutation.mutate(followUp.id)}
                         >
                           Dismiss
+                        </button>
+                        <button
+                          className="button button--ghost"
+                          type="button"
+                          onClick={() => followUpEmailMutation.mutate(followUp.id)}
+                        >
+                          Email
                         </button>
                       </>
                     ) : (
@@ -253,6 +319,79 @@ export function TodayPage() {
             </>
           ) : (
             <p className="muted">Add a client to start tracking packages.</p>
+          )}
+        </div>
+        <div className="card">
+          <div className="card-header">
+            <h3>Calendar suggestions</h3>
+            <span className="chip">Google Calendar</span>
+          </div>
+          {clientsQuery.data && clientsQuery.data.length > 0 ? (
+            <div className="stack">
+              <label className="field">
+                <span>Default client</span>
+                <select
+                  value={suggestionClientId ?? ''}
+                  onChange={(event) => setSuggestionClientId(Number(event.target.value))}
+                >
+                  {clientsQuery.data.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>From</span>
+                <input
+                  type="date"
+                  value={suggestionFrom}
+                  onChange={(event) => setSuggestionFrom(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>To</span>
+                <input
+                  type="date"
+                  value={suggestionTo}
+                  onChange={(event) => setSuggestionTo(event.target.value)}
+                />
+              </label>
+              {suggestionsQuery.isLoading ? (
+                <p className="muted">Loading suggestions...</p>
+              ) : suggestionsQuery.data && suggestionsQuery.data.length > 0 ? (
+                <ul className="list">
+                  {suggestionsQuery.data.slice(0, 3).map((event) => (
+                    <li key={event.id} className="list-row">
+                      <div className="list-row-main">
+                        <span>{event.summary || 'Untitled event'}</span>
+                        <span className="muted">
+                          {new Date(event.start_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="list-actions">
+                        <button
+                          className="button button--ghost"
+                          type="button"
+                          disabled={!suggestionClientId || suggestionLogMutation.isPending}
+                          onClick={() => {
+                            if (suggestionClientId) {
+                              suggestionLogMutation.mutate({ id: event.id, clientId: suggestionClientId })
+                            }
+                          }}
+                        >
+                          Create work event
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">No calendar suggestions in this window.</p>
+              )}
+            </div>
+          ) : (
+            <p className="muted">Add a client to enable calendar suggestions.</p>
           )}
         </div>
         <div className="card">

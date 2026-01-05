@@ -100,6 +100,14 @@ Google Calendar (read-only import):
 
 Make sure `GOOGLE_REDIRECT_URL` matches your API host/port (for example `http://localhost:8080/api/integrations/google/callback`).
 
+Email (system mailer):
+
+- `MAIL_FROM`
+- `MAIL_REPLY_TO` (optional)
+- `MAIL_BCC` (optional)
+
+Note: the API uses PHP's `mail()` function. In Docker, configure a sendmail-compatible binary if you want delivery.
+
 ## Key API routes
 
 - `POST /api/auth/register`
@@ -118,9 +126,14 @@ Make sure `GOOGLE_REDIRECT_URL` matches your API host/port (for example `http://
 - `POST /api/invoice-drafts/{id}/send`
 - `POST /api/invoice-drafts/{id}/mark-paid`
 - `POST /api/invoice-drafts/{id}/void`
+- `POST /api/invoice-drafts/{id}/email`
 - `POST /api/invoice-drafts/{id}/payment-link/refresh`
 - `GET /api/follow-ups?status=open`
 - `GET /api/follow-ups/export?status=&from=&to=`
 - `POST /api/follow-ups/{id}/done`
 - `POST /api/follow-ups/{id}/dismiss`
 - `POST /api/follow-ups/{id}/reopen`
+- `POST /api/follow-ups/{id}/email`
+- `GET /api/calendar/suggestions?from=&to=`
+- `POST /api/calendar/events/{id}/log`
+- `GET /api/audit-logs?limit=`

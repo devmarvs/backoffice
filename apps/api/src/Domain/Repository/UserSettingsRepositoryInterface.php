@@ -9,4 +9,6 @@ interface UserSettingsRepositoryInterface
     public function getByUserId(int $userId): ?array;
 
     public function upsert(int $userId, array $data): array;
+
+    public function updateLastReminderRun(int $userId, \DateTimeImmutable $runAt): void;
 }

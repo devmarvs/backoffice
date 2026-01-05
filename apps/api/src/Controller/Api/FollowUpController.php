@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Controller\Api;
 
 use App\Domain\Enum\FollowUpStatus;
+use App\Domain\Repository\AuditLogRepositoryInterface;
+use App\Domain\Repository\ClientRepositoryInterface;
 use App\Domain\Repository\FollowUpRepositoryInterface;
+use App\Infrastructure\Mail\SimpleMailer;
 use DateTimeImmutable;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -120,6 +123,7 @@ final class FollowUpController extends BaseApiController
     public function markDone(
         Request $request,
         FollowUpRepositoryInterface $followUps,
+        AuditLogRepositoryInterface $auditLogs,
         int $id
     ): JsonResponse
     {
@@ -133,6 +137,8 @@ final class FollowUpController extends BaseApiController
             return $this->jsonError('not_found', 'Follow-up not found.', 404);
         }
 
+        $auditLogs->add($userId, 'follow_up.done', 'follow_up', $id, ['status' => FollowUpStatus::Done->value]);
+
         $followUp = $this->normalizeDates($followUp, ['due_at', 'created_at', 'updated_at']);
 
         return $this->jsonSuccess($followUp);
@@ -142,6 +148,7 @@ final class FollowUpController extends BaseApiController
     public function dismiss(
         Request $request,
         FollowUpRepositoryInterface $followUps,
+        AuditLogRepositoryInterface $auditLogs,
         int $id
     ): JsonResponse
     {
@@ -155,6 +162,8 @@ final class FollowUpController extends BaseApiController
             return $this->jsonError('not_found', 'Follow-up not found.', 404);
         }
 
+        $auditLogs->add($userId, 'follow_up.dismissed', 'follow_up', $id, ['status' => FollowUpStatus::Dismissed->value]);
+
         $followUp = $this->normalizeDates($followUp, ['due_at', 'created_at', 'updated_at']);
 
         return $this->jsonSuccess($followUp);
@@ -164,6 +173,34 @@ final class FollowUpController extends BaseApiController
     public function reopen(
         Request $request,
         FollowUpRepositoryInterface $followUps,
+        AuditLogRepositoryInterface $auditLogs,
+        int $id
+    ): JsonResponse
+    {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        $followUp = $followUps->findById($userId, $id);
+        if ($followUp === null) {
+            return $this->jsonError('not_found', 'Follow-up not found.', 404);
+        }
+
+        $auditLogs->add($userId, 'follow_up.reopened', 'follow_up', $id, ['status' => FollowUpStatus::Open->value]);
+
+        $followUp = $this->normalizeDates($followUp, ['due_at', 'created_at', 'updated_at']);
+
+        return $this->jsonSuccess($followUp);
+    }
+
+    #[Route('/{id}/email', methods: ['POST'])]
+    public function email(
+        Request $request,
+        FollowUpRepositoryInterface $followUps,
+        ClientRepositoryInterface $clients,
+        SimpleMailer $mailer,
+        AuditLogRepositoryInterface $auditLogs,
         int $id
     ): JsonResponse
     {
@@ -177,8 +214,36 @@ final class FollowUpController extends BaseApiController
             return $this->jsonError('not_found', 'Follow-up not found.', 404);
         }
 
+        $client = $clients->findById($userId, (int) $followUp['client_id']);
+        if ($client === null) {
+            return $this->jsonError('not_found', 'Client not found.', 404);
+        }
+
+        $email = isset($client['email']) ? trim((string) $client['email']) : '';
+        if ($email === '') {
+            return $this->jsonError('missing_email', 'Client email is required to send.', 409);
+        }
+
+        if (!$mailer->isConfigured()) {
+            return $this->jsonError('not_configured', 'Mail sender is not configured.', 409);
+        }
+
+        $subject = sprintf('Follow-up for %s', $client['name'] ?? 'your session');
+        $body = (string) ($followUp['suggested_message'] ?? '');
+        if ($body === '') {
+            $body = 'Just checking in on our recent session.';
+        }
+
+        try {
+            $mailer->send($email, $subject, $body);
+        } catch (\Throwable $exception) {
+            return $this->jsonError('email_failed', $exception->getMessage(), 500);
+        }
+
+        $auditLogs->add($userId, 'follow_up.emailed', 'follow_up', $id, ['to' => $email]);
+
         $followUp = $this->normalizeDates($followUp, ['due_at', 'created_at', 'updated_at']);
 
-        return $this->jsonSuccess($followUp);
+        return $this->jsonSuccess(['sent' => true, 'follow_up' => $followUp]);
     }
 }

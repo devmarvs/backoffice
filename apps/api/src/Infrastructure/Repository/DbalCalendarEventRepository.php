@@ -65,4 +65,48 @@ final class DbalCalendarEventRepository implements CalendarEventRepositoryInterf
 
         return $this->connection->fetchAllAssociative($sql, $params);
     }
+
+    public function listSuggestions(int $userId, ?string $from, ?string $to): array
+    {
+        $conditions = ['c.user_id = :user_id'];
+        $params = ['user_id' => $userId];
+
+        if ($from !== null) {
+            $conditions[] = 'c.start_at >= :from';
+            $params['from'] = $from;
+        }
+
+        if ($to !== null) {
+            $conditions[] = 'c.start_at <= :to';
+            $params['to'] = $to;
+        }
+
+        $sql = 'SELECT c.id, c.user_id, c.provider, c.provider_event_id, c.summary, c.start_at, c.end_at, c.raw_payload, c.created_at
+                FROM calendar_events c
+                LEFT JOIN work_events w
+                  ON w.user_id = c.user_id
+                 AND w.source_type = :source_type
+                 AND w.source_id = c.id
+                WHERE ' . implode(' AND ', $conditions) . ' AND w.id IS NULL
+                ORDER BY c.start_at ASC';
+
+        $params['source_type'] = 'calendar_event';
+
+        return $this->connection->fetchAllAssociative($sql, $params);
+    }
+
+    public function findById(int $userId, int $eventId): ?array
+    {
+        $row = $this->connection->fetchAssociative(
+            'SELECT id, user_id, provider, provider_event_id, summary, start_at, end_at, raw_payload, created_at
+             FROM calendar_events
+             WHERE id = :id AND user_id = :user_id',
+            [
+                'id' => $eventId,
+                'user_id' => $userId,
+            ]
+        );
+
+        return $row ?: null;
+    }
 }

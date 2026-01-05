@@ -219,6 +219,11 @@ final class StubFollowUpRepository implements FollowUpRepositoryInterface
     {
         throw new \BadMethodCallException('Not used.');
     }
+
+    public function findById(int $userId, int $followUpId): ?array
+    {
+        throw new \BadMethodCallException('Not used.');
+    }
 }
 
 final class StubMessageTemplateRepository implements MessageTemplateRepositoryInterface

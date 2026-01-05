@@ -28,6 +28,7 @@ final class ReminderService
         $reminderDays = $settings['invoice_reminder_days'] ?? $this->defaultReminderDays;
 
         if ($reminderDays === null || (int) $reminderDays <= 0) {
+            $this->settings->updateLastReminderRun($userId, new DateTimeImmutable());
             return 0;
         }
 
@@ -75,6 +76,8 @@ final class ReminderService
 
             $count++;
         }
+
+        $this->settings->updateLastReminderRun($userId, new DateTimeImmutable());
 
         return $count;
     }

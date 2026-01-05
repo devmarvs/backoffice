@@ -17,7 +17,7 @@ final class DbalUserSettingsRepository implements UserSettingsRepositoryInterfac
     {
         $row = $this->connection->fetchAssociative(
             'SELECT user_id, business_type, charge_model, default_rate_cents, default_currency,
-                    follow_up_days, invoice_reminder_days, onboarding_note, created_at, updated_at
+                    follow_up_days, invoice_reminder_days, onboarding_note, last_reminder_run_at, created_at, updated_at
              FROM user_settings
              WHERE user_id = :user_id',
             ['user_id' => $userId]
@@ -37,6 +37,7 @@ final class DbalUserSettingsRepository implements UserSettingsRepositoryInterfac
                 'follow_up_days' => null,
                 'invoice_reminder_days' => null,
                 'onboarding_note' => null,
+                'last_reminder_run_at' => null,
             ],
             $data
         );
@@ -50,7 +51,8 @@ final class DbalUserSettingsRepository implements UserSettingsRepositoryInterfac
                 default_currency,
                 follow_up_days,
                 invoice_reminder_days,
-                onboarding_note
+                onboarding_note,
+                last_reminder_run_at
              ) VALUES (
                 :user_id,
                 :business_type,
@@ -59,7 +61,8 @@ final class DbalUserSettingsRepository implements UserSettingsRepositoryInterfac
                 :default_currency,
                 :follow_up_days,
                 :invoice_reminder_days,
-                :onboarding_note
+                :onboarding_note,
+                :last_reminder_run_at
              )
              ON CONFLICT (user_id)
              DO UPDATE SET
@@ -70,9 +73,10 @@ final class DbalUserSettingsRepository implements UserSettingsRepositoryInterfac
                 follow_up_days = EXCLUDED.follow_up_days,
                 invoice_reminder_days = EXCLUDED.invoice_reminder_days,
                 onboarding_note = EXCLUDED.onboarding_note,
+                last_reminder_run_at = COALESCE(EXCLUDED.last_reminder_run_at, user_settings.last_reminder_run_at),
                 updated_at = NOW()
              RETURNING user_id, business_type, charge_model, default_rate_cents, default_currency,
-                       follow_up_days, invoice_reminder_days, onboarding_note, created_at, updated_at',
+                       follow_up_days, invoice_reminder_days, onboarding_note, last_reminder_run_at, created_at, updated_at',
             [
                 'user_id' => $userId,
                 'business_type' => $payload['business_type'],
@@ -82,9 +86,26 @@ final class DbalUserSettingsRepository implements UserSettingsRepositoryInterfac
                 'follow_up_days' => $payload['follow_up_days'],
                 'invoice_reminder_days' => $payload['invoice_reminder_days'],
                 'onboarding_note' => $payload['onboarding_note'],
+                'last_reminder_run_at' => $payload['last_reminder_run_at'],
             ]
         );
 
         return $row ?: [];
+    }
+
+    public function updateLastReminderRun(int $userId, \DateTimeImmutable $runAt): void
+    {
+        $this->connection->executeStatement(
+            'INSERT INTO user_settings (user_id, last_reminder_run_at)
+             VALUES (:user_id, :last_reminder_run_at)
+             ON CONFLICT (user_id)
+             DO UPDATE SET
+                last_reminder_run_at = EXCLUDED.last_reminder_run_at,
+                updated_at = NOW()',
+            [
+                'user_id' => $userId,
+                'last_reminder_run_at' => $runAt->format('Y-m-d H:i:sP'),
+            ]
+        );
     }
 }

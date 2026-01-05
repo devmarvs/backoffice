@@ -9,4 +9,8 @@ interface CalendarEventRepositoryInterface
     public function upsertEvents(int $userId, string $provider, array $events): int;
 
     public function listByRange(int $userId, ?string $from, ?string $to): array;
+
+    public function listSuggestions(int $userId, ?string $from, ?string $to): array;
+
+    public function findById(int $userId, int $eventId): ?array;
 }

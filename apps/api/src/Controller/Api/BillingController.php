@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
+use App\Domain\Repository\AuditLogRepositoryInterface;
 use App\Domain\Repository\BillingSubscriptionRepositoryInterface;
 use App\Domain\Repository\BillingWebhookEventRepositoryInterface;
+use App\Domain\Repository\InvoiceDraftRepositoryInterface;
+use App\Domain\Repository\PaymentLinkRepositoryInterface;
 use App\Domain\Repository\UserRepositoryInterface;
 use App\Infrastructure\Billing\PayPalBillingService;
 use App\Infrastructure\Billing\StripeBillingService;
+use App\Domain\Enum\InvoiceDraftStatus;
 use DateTimeImmutable;
 use JsonException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -196,7 +200,10 @@ final class BillingController extends BaseApiController
         Request $request,
         StripeBillingService $stripe,
         BillingSubscriptionRepositoryInterface $subscriptions,
-        BillingWebhookEventRepositoryInterface $webhookEvents
+        BillingWebhookEventRepositoryInterface $webhookEvents,
+        PaymentLinkRepositoryInterface $paymentLinks,
+        InvoiceDraftRepositoryInterface $drafts,
+        AuditLogRepositoryInterface $auditLogs
     ): JsonResponse {
         $payload = $request->getContent();
         $signature = $request->headers->get('stripe-signature');
@@ -239,6 +246,29 @@ final class BillingController extends BaseApiController
                         'status' => 'active',
                         'current_period_end' => null,
                     ]);
+                }
+
+                if (isset($data->payment_link) && $data->payment_link !== null) {
+                    $link = $paymentLinks->findWithInvoiceByProviderId('stripe', (string) $data->payment_link);
+                    if ($link !== null) {
+                        if (($link['status'] ?? '') !== 'paid') {
+                            $paymentLinks->updateStatus((int) $link['id'], 'paid');
+                        }
+
+                        $invoiceStatus = $link['invoice_status'] ?? null;
+                        if (!in_array($invoiceStatus, [InvoiceDraftStatus::Paid->value, InvoiceDraftStatus::Void->value], true)) {
+                            $updated = $drafts->updateStatus((int) $link['user_id'], (int) $link['invoice_draft_id'], InvoiceDraftStatus::Paid->value);
+                            if ($updated !== null) {
+                                $auditLogs->add(
+                                    (int) $link['user_id'],
+                                    'invoice.paid',
+                                    'invoice_draft',
+                                    (int) $link['invoice_draft_id'],
+                                    ['source' => 'stripe_payment_link']
+                                );
+                            }
+                        }
+                    }
                 }
             }
 

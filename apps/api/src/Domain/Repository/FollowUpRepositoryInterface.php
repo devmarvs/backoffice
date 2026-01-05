@@ -29,4 +29,6 @@ interface FollowUpRepositoryInterface
         ?DateTimeImmutable $from,
         ?DateTimeImmutable $to
     ): array;
+
+    public function findById(int $userId, int $followUpId): ?array;
 }

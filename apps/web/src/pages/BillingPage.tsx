@@ -9,6 +9,7 @@ import {
   markInvoicePaid,
   markInvoiceSent,
   refreshPaymentLink,
+  sendInvoiceEmail,
   voidInvoiceDraft,
 } from '../api/client'
 
@@ -66,6 +67,15 @@ export function BillingPage() {
       setError(null)
     },
     onError: (err) => setError(err instanceof Error ? err.message : 'Could not mark as paid.'),
+  })
+
+  const emailMutation = useMutation({
+    mutationFn: (id: number) => sendInvoiceEmail(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoice-drafts'] })
+      setError(null)
+    },
+    onError: (err) => setError(err instanceof Error ? err.message : 'Could not send invoice email.'),
   })
 
   const voidMutation = useMutation({
@@ -142,7 +152,11 @@ export function BillingPage() {
               className="button button--ghost"
               type="button"
               onClick={() =>
-                window.open(`/api/invoice-drafts/export?status=${status}`, '_blank', 'noopener')
+                window.open(
+                  `/api/invoice-drafts/export?status=${status}&from=${bulkFrom}&to=${bulkTo}`,
+                  '_blank',
+                  'noopener'
+                )
               }
             >
               Export CSV
@@ -196,6 +210,15 @@ export function BillingPage() {
                       onClick={() => paymentLinkMutation.mutate(draft.id)}
                     >
                       Payment link
+                    </button>
+                  ) : null}
+                  {draft.status !== 'paid' && draft.status !== 'void' ? (
+                    <button
+                      className="button button--ghost"
+                      type="button"
+                      onClick={() => emailMutation.mutate(draft.id)}
+                    >
+                      Send email
                     </button>
                   ) : null}
                   {draft.status !== 'paid' && draft.status !== 'void' ? (

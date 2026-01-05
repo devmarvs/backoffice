@@ -11,4 +11,10 @@ interface PaymentLinkRepositoryInterface
     public function findByInvoiceDraft(int $invoiceDraftId): ?array;
 
     public function deactivateByInvoiceDraft(int $invoiceDraftId): int;
+
+    public function findByProviderId(string $provider, string $providerId): ?array;
+
+    public function findWithInvoiceByProviderId(string $provider, string $providerId): ?array;
+
+    public function updateStatus(int $paymentLinkId, string $status): ?array;
 }

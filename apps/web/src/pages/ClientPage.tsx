@@ -13,6 +13,8 @@ import {
 } from '../api/client'
 import { CURRENCIES } from '../data/currencies'
 
+const toDateInput = (date: Date) => date.toISOString().slice(0, 10)
+
 export function ClientPage() {
   const { id } = useParams()
   const clientId = Number(id)
@@ -27,6 +29,10 @@ export function ClientPage() {
   })
   const [error, setError] = useState<string | null>(null)
   const [generatedMessage, setGeneratedMessage] = useState<string | null>(null)
+  const [workEventFrom, setWorkEventFrom] = useState(() =>
+    toDateInput(new Date(Date.now() - 30 * 86400000))
+  )
+  const [workEventTo, setWorkEventTo] = useState(() => toDateInput(new Date()))
 
   const clientQuery = useQuery({
     queryKey: ['clients', clientId],
@@ -238,12 +244,34 @@ export function ClientPage() {
                 className="button button--ghost"
                 type="button"
                 onClick={() =>
-                  window.open(`/api/work-events/export?clientId=${clientId}`, '_blank', 'noopener')
+                  window.open(
+                    `/api/work-events/export?clientId=${clientId}&from=${workEventFrom}&to=${workEventTo}`,
+                    '_blank',
+                    'noopener'
+                  )
                 }
               >
                 Export CSV
               </button>
             </div>
+          </div>
+          <div className="grid two-columns">
+            <label className="field">
+              <span>From</span>
+              <input
+                type="date"
+                value={workEventFrom}
+                onChange={(event) => setWorkEventFrom(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>To</span>
+              <input
+                type="date"
+                value={workEventTo}
+                onChange={(event) => setWorkEventTo(event.target.value)}
+              />
+            </label>
           </div>
           {workEventsQuery.isLoading ? (
             <p className="muted">Loading sessions...</p>

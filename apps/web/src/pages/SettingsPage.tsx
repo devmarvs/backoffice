@@ -5,6 +5,7 @@ import {
   connectGoogle,
   confirmPayPalSubscription,
   disconnectGoogle,
+  fetchAuditLogs,
   fetchBillingStatus,
   fetchPayPalStatus,
   fetchCalendarEvents,
@@ -70,6 +71,10 @@ export function SettingsPage() {
     queryKey: ['calendar-events'],
     queryFn: () => fetchCalendarEvents({}),
     enabled: showCalendar,
+  })
+  const auditQuery = useQuery({
+    queryKey: ['audit-logs'],
+    queryFn: () => fetchAuditLogs(10),
   })
 
   useEffect(() => {
@@ -137,6 +142,7 @@ export function SettingsPage() {
   const remindersMutation = useMutation({
     mutationFn: runReminders,
     onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
       setSuccess(`Created ${result.created} reminder(s).`)
       setError(null)
     },
@@ -393,6 +399,13 @@ export function SettingsPage() {
           <p className="muted">
             Generate payment reminder follow-ups for old drafts with one click.
           </p>
+          {settingsQuery.data?.last_reminder_run_at ? (
+            <p className="muted">
+              Last run: {new Date(settingsQuery.data.last_reminder_run_at).toLocaleString()}
+            </p>
+          ) : (
+            <p className="muted">Last run: never</p>
+          )}
           <button
             className="button button--ghost"
             type="button"
@@ -463,6 +476,29 @@ export function SettingsPage() {
             </div>
           ) : (
             <p className="muted">Loading templates...</p>
+          )}
+        </div>
+      </section>
+
+      <section className="grid">
+        <div className="card">
+          <div className="card-header">
+            <h3>Recent activity</h3>
+            <span className="chip">Audit log</span>
+          </div>
+          {auditQuery.isLoading ? (
+            <p className="muted">Loading activity...</p>
+          ) : auditQuery.data && auditQuery.data.length > 0 ? (
+            <ul className="list">
+              {auditQuery.data.map((entry) => (
+                <li key={entry.id}>
+                  <span>{entry.action.replace(/[_.]/g, ' ')}</span>
+                  <strong>{new Date(entry.created_at).toLocaleString()}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">No recent activity yet.</p>
           )}
         </div>
       </section>

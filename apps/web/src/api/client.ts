@@ -117,6 +117,7 @@ export type UserSettings = {
   default_currency?: string | null
   follow_up_days?: number | null
   invoice_reminder_days?: number | null
+  last_reminder_run_at?: string | null
   onboarding_note?: string | null
   created_at?: string
   updated_at?: string
@@ -168,6 +169,15 @@ export type CalendarEvent = {
   summary?: string | null
   start_at: string
   end_at?: string | null
+  created_at: string
+}
+
+export type AuditLog = {
+  id: number
+  action: string
+  entity_type: string
+  entity_id?: number | null
+  metadata?: Record<string, unknown> | null
   created_at: string
 }
 
@@ -307,6 +317,13 @@ export async function voidInvoiceDraft(id: number) {
   return apiFetch<InvoiceDraft>(`/api/invoice-drafts/${id}/void`, { method: 'POST' })
 }
 
+export async function sendInvoiceEmail(id: number, payload?: { subject?: string; message?: string }) {
+  return apiFetch<{ sent: boolean; invoice: InvoiceDraft }>(`/api/invoice-drafts/${id}/email`, {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  })
+}
+
 export async function fetchInvoiceDraftsBulk(params: { from?: string; to?: string }) {
   const query = new URLSearchParams()
   if (params.from) query.set('from', params.from)
@@ -348,6 +365,12 @@ export async function dismissFollowUp(id: number) {
 
 export async function reopenFollowUp(id: number) {
   return apiFetch<FollowUp>(`/api/follow-ups/${id}/reopen`, { method: 'POST' })
+}
+
+export async function sendFollowUpEmail(id: number) {
+  return apiFetch<{ sent: boolean; follow_up: FollowUp }>(`/api/follow-ups/${id}/email`, {
+    method: 'POST',
+  })
 }
 
 export async function fetchPackages(clientId: number) {
@@ -468,6 +491,31 @@ export async function fetchCalendarEvents(params: { from?: string; to?: string }
   if (params.to) query.set('to', params.to)
   const suffix = query.toString() ? `?${query.toString()}` : ''
   return apiFetch<CalendarEvent[]>(`/api/calendar/events${suffix}`)
+}
+
+export async function fetchCalendarSuggestions(params: { from?: string; to?: string }) {
+  const query = new URLSearchParams()
+  if (params.from) query.set('from', params.from)
+  if (params.to) query.set('to', params.to)
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return apiFetch<CalendarEvent[]>(`/api/calendar/suggestions${suffix}`)
+}
+
+export async function logWorkEventFromCalendar(
+  id: number,
+  payload: { client_id: number; duration_minutes?: number; billable?: boolean; rate_cents?: number; currency?: string; notes?: string }
+) {
+  return apiFetch<{ work_event: Record<string, unknown>; autopilot: Record<string, unknown> }>(
+    `/api/calendar/events/${id}/log`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }
+  )
+}
+
+export async function fetchAuditLogs(limit = 10) {
+  return apiFetch<AuditLog[]>(`/api/audit-logs?limit=${encodeURIComponent(String(limit))}`)
 }
 
 export async function fetchReferrals() {
