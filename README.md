@@ -112,9 +112,15 @@ Make sure `GOOGLE_REDIRECT_URL` matches your API host/port (for example `http://
 - `PATCH /api/clients/{id}`
 - `POST /api/work-events`
 - `GET /api/work-events?from=&to=&clientId=`
+- `GET /api/work-events/export?from=&to=&clientId=`
 - `GET /api/invoice-drafts?status=draft`
+- `GET /api/invoice-drafts/export?status=&from=&to=`
 - `POST /api/invoice-drafts/{id}/send`
 - `POST /api/invoice-drafts/{id}/mark-paid`
+- `POST /api/invoice-drafts/{id}/void`
+- `POST /api/invoice-drafts/{id}/payment-link/refresh`
 - `GET /api/follow-ups?status=open`
+- `GET /api/follow-ups/export?status=&from=&to=`
 - `POST /api/follow-ups/{id}/done`
 - `POST /api/follow-ups/{id}/dismiss`
+- `POST /api/follow-ups/{id}/reopen`

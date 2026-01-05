@@ -54,6 +54,7 @@ services:
     App\Domain\Repository\UserSettingsRepositoryInterface: '@App\Infrastructure\Repository\DbalUserSettingsRepository'
     App\Domain\Repository\MessageTemplateRepositoryInterface: '@App\Infrastructure\Repository\DbalMessageTemplateRepository'
     App\Domain\Repository\BillingSubscriptionRepositoryInterface: '@App\Infrastructure\Repository\DbalBillingSubscriptionRepository'
+    App\Domain\Repository\BillingWebhookEventRepositoryInterface: '@App\Infrastructure\Repository\DbalBillingWebhookEventRepository'
     App\Domain\Repository\PaymentLinkRepositoryInterface: '@App\Infrastructure\Repository\DbalPaymentLinkRepository'
     App\Domain\Repository\IntegrationRepositoryInterface: '@App\Infrastructure\Repository\DbalIntegrationRepository'
     App\Domain\Repository\CalendarEventRepositoryInterface: '@App\Infrastructure\Repository\DbalCalendarEventRepository'

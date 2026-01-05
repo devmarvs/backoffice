@@ -31,4 +31,11 @@ interface InvoiceDraftRepositoryInterface
     public function updateStatus(int $userId, int $invoiceDraftId, string $status): ?array;
 
     public function findById(int $userId, int $invoiceDraftId): ?array;
+
+    public function listForExport(
+        int $userId,
+        ?string $status,
+        ?string $from,
+        ?string $to
+    ): array;
 }

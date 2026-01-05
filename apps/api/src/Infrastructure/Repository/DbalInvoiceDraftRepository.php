@@ -174,4 +174,34 @@ final class DbalInvoiceDraftRepository implements InvoiceDraftRepositoryInterfac
 
         return $row ?: null;
     }
+
+    public function listForExport(int $userId, ?string $status, ?string $from, ?string $to): array
+    {
+        $conditions = ['d.user_id = :user_id'];
+        $params = ['user_id' => $userId];
+
+        if ($status !== null && $status !== '') {
+            $conditions[] = 'd.status = :status';
+            $params['status'] = $status;
+        }
+
+        if ($from !== null) {
+            $conditions[] = 'd.created_at >= :from';
+            $params['from'] = $from;
+        }
+
+        if ($to !== null) {
+            $conditions[] = 'd.created_at <= :to';
+            $params['to'] = $to;
+        }
+
+        $sql = 'SELECT d.id, d.client_id, c.name AS client_name, d.period_start, d.period_end, d.amount_cents,
+                       d.currency, d.status, d.created_at, d.updated_at
+                FROM invoice_drafts d
+                INNER JOIN clients c ON c.id = d.client_id AND c.user_id = d.user_id
+                WHERE ' . implode(' AND ', $conditions) . '
+                ORDER BY d.created_at DESC';
+
+        return $this->connection->fetchAllAssociative($sql, $params);
+    }
 }

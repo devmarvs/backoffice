@@ -44,4 +44,17 @@ final class DbalPaymentLinkRepository implements PaymentLinkRepositoryInterface
 
         return $row ?: null;
     }
+
+    public function deactivateByInvoiceDraft(int $invoiceDraftId): int
+    {
+        return $this->connection->executeStatement(
+            'UPDATE payment_links
+             SET status = :status, updated_at = NOW()
+             WHERE invoice_draft_id = :invoice_draft_id AND status != :status',
+            [
+                'status' => 'inactive',
+                'invoice_draft_id' => $invoiceDraftId,
+            ]
+        );
+    }
 }

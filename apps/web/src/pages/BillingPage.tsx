@@ -8,13 +8,15 @@ import {
   fetchInvoiceDraftsBulk,
   markInvoicePaid,
   markInvoiceSent,
+  refreshPaymentLink,
+  voidInvoiceDraft,
 } from '../api/client'
 
 const toDateInput = (date: Date) => date.toISOString().slice(0, 10)
 
 export function BillingPage() {
   const queryClient = useQueryClient()
-  const [status, setStatus] = useState<'draft' | 'sent' | 'paid'>('draft')
+  const [status, setStatus] = useState<'draft' | 'sent' | 'paid' | 'void'>('draft')
   const [bulkFrom, setBulkFrom] = useState(() => toDateInput(new Date(Date.now() - 6 * 86400000)))
   const [bulkTo, setBulkTo] = useState(() => toDateInput(new Date()))
   const [bulkSelection, setBulkSelection] = useState<number[]>([])
@@ -66,6 +68,15 @@ export function BillingPage() {
     onError: (err) => setError(err instanceof Error ? err.message : 'Could not mark as paid.'),
   })
 
+  const voidMutation = useMutation({
+    mutationFn: voidInvoiceDraft,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoice-drafts'] })
+      setError(null)
+    },
+    onError: (err) => setError(err instanceof Error ? err.message : 'Could not void invoice.'),
+  })
+
   const paymentLinkMutation = useMutation({
     mutationFn: createPaymentLink,
     onSuccess: (link) => {
@@ -74,6 +85,16 @@ export function BillingPage() {
     },
     onError: (err) =>
       setError(err instanceof Error ? err.message : 'Could not create payment link.'),
+  })
+
+  const refreshLinkMutation = useMutation({
+    mutationFn: refreshPaymentLink,
+    onSuccess: (link) => {
+      window.open(link.url, '_blank', 'noopener')
+      setError(null)
+    },
+    onError: (err) =>
+      setError(err instanceof Error ? err.message : 'Could not refresh payment link.'),
   })
 
   const bulkMarkMutation = useMutation({
@@ -107,7 +128,7 @@ export function BillingPage() {
         <div className="card-header">
           <h3>Invoice drafts</h3>
           <div className="chip-group">
-            {(['draft', 'sent', 'paid'] as const).map((value) => (
+            {(['draft', 'sent', 'paid', 'void'] as const).map((value) => (
               <button
                 key={value}
                 type="button"
@@ -117,6 +138,15 @@ export function BillingPage() {
                 {value}
               </button>
             ))}
+            <button
+              className="button button--ghost"
+              type="button"
+              onClick={() =>
+                window.open(`/api/invoice-drafts/export?status=${status}`, '_blank', 'noopener')
+              }
+            >
+              Export CSV
+            </button>
           </div>
         </div>
         {invoiceQuery.isLoading ? (
@@ -150,7 +180,7 @@ export function BillingPage() {
                       Mark sent
                     </button>
                   ) : null}
-                  {draft.status !== 'paid' ? (
+                  {draft.status !== 'paid' && draft.status !== 'void' ? (
                     <button
                       className="button button--ghost"
                       type="button"
@@ -159,13 +189,31 @@ export function BillingPage() {
                       Mark paid
                     </button>
                   ) : null}
-                  {draft.status !== 'paid' ? (
+                  {draft.status !== 'paid' && draft.status !== 'void' ? (
                     <button
                       className="button button--ghost"
                       type="button"
                       onClick={() => paymentLinkMutation.mutate(draft.id)}
                     >
                       Payment link
+                    </button>
+                  ) : null}
+                  {draft.status !== 'paid' && draft.status !== 'void' ? (
+                    <button
+                      className="button button--ghost"
+                      type="button"
+                      onClick={() => refreshLinkMutation.mutate(draft.id)}
+                    >
+                      Refresh link
+                    </button>
+                  ) : null}
+                  {draft.status !== 'paid' && draft.status !== 'void' ? (
+                    <button
+                      className="button button--ghost"
+                      type="button"
+                      onClick={() => voidMutation.mutate(draft.id)}
+                    >
+                      Void
                     </button>
                   ) : null}
                 </div>

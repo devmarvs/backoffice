@@ -303,6 +303,10 @@ export async function markInvoicePaid(id: number) {
   return apiFetch<InvoiceDraft>(`/api/invoice-drafts/${id}/mark-paid`, { method: 'POST' })
 }
 
+export async function voidInvoiceDraft(id: number) {
+  return apiFetch<InvoiceDraft>(`/api/invoice-drafts/${id}/void`, { method: 'POST' })
+}
+
 export async function fetchInvoiceDraftsBulk(params: { from?: string; to?: string }) {
   const query = new URLSearchParams()
   if (params.from) query.set('from', params.from)
@@ -324,6 +328,12 @@ export async function createPaymentLink(id: number) {
   })
 }
 
+export async function refreshPaymentLink(id: number) {
+  return apiFetch<PaymentLink>(`/api/invoice-drafts/${id}/payment-link/refresh`, {
+    method: 'POST',
+  })
+}
+
 export async function fetchFollowUps(status = 'open') {
   return apiFetch<FollowUp[]>(`/api/follow-ups?status=${encodeURIComponent(status)}`)
 }
@@ -334,6 +344,10 @@ export async function markFollowUpDone(id: number) {
 
 export async function dismissFollowUp(id: number) {
   return apiFetch<FollowUp>(`/api/follow-ups/${id}/dismiss`, { method: 'POST' })
+}
+
+export async function reopenFollowUp(id: number) {
+  return apiFetch<FollowUp>(`/api/follow-ups/${id}/reopen`, { method: 'POST' })
 }
 
 export async function fetchPackages(clientId: number) {

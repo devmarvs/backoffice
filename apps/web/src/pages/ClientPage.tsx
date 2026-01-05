@@ -232,7 +232,18 @@ export function ClientPage() {
         <div className="card">
           <div className="card-header">
             <h3>Work timeline</h3>
-            <span className="chip">Latest activity</span>
+            <div className="chip-group">
+              <span className="chip">Latest activity</span>
+              <button
+                className="button button--ghost"
+                type="button"
+                onClick={() =>
+                  window.open(`/api/work-events/export?clientId=${clientId}`, '_blank', 'noopener')
+                }
+              >
+                Export CSV
+              </button>
+            </div>
           </div>
           {workEventsQuery.isLoading ? (
             <p className="muted">Loading sessions...</p>

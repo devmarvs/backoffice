@@ -9,4 +9,6 @@ interface PaymentLinkRepositoryInterface
     public function create(array $data): array;
 
     public function findByInvoiceDraft(int $invoiceDraftId): ?array;
+
+    public function deactivateByInvoiceDraft(int $invoiceDraftId): int;
 }

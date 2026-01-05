@@ -164,6 +164,11 @@ final class StubInvoiceDraftRepository implements InvoiceDraftRepositoryInterfac
     {
         throw new \BadMethodCallException('Not used.');
     }
+
+    public function listForExport(int $userId, ?string $status, ?string $from, ?string $to): array
+    {
+        throw new \BadMethodCallException('Not used.');
+    }
 }
 
 final class StubFollowUpRepository implements FollowUpRepositoryInterface
@@ -201,6 +206,16 @@ final class StubFollowUpRepository implements FollowUpRepositoryInterface
     }
 
     public function findOpenBySource(int $userId, string $sourceType, int $sourceId): ?array
+    {
+        throw new \BadMethodCallException('Not used.');
+    }
+
+    public function listForExport(
+        int $userId,
+        ?string $status,
+        ?DateTimeImmutable $from,
+        ?DateTimeImmutable $to
+    ): array
     {
         throw new \BadMethodCallException('Not used.');
     }

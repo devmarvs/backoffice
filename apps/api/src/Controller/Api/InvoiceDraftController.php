@@ -10,6 +10,7 @@ use App\Domain\Enum\InvoiceDraftStatus;
 use App\Domain\Repository\ClientRepositoryInterface;
 use App\Domain\Repository\InvoiceDraftRepositoryInterface;
 use App\Domain\Repository\PaymentLinkRepositoryInterface;
+use DateTimeImmutable;
 use JsonException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -41,6 +42,83 @@ final class InvoiceDraftController extends BaseApiController
         );
 
         return $this->jsonSuccess($rows);
+    }
+
+    #[Route('/export', methods: ['GET'])]
+    public function export(Request $request, InvoiceDraftRepositoryInterface $drafts): Response
+    {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        $status = $request->query->get('status');
+        $allowed = array_map(fn (InvoiceDraftStatus $item) => $item->value, InvoiceDraftStatus::cases());
+
+        if ($status !== null && $status !== '' && !in_array($status, $allowed, true)) {
+            return $this->jsonError('invalid_status', 'Status is invalid.', 422);
+        }
+
+        $from = $request->query->get('from');
+        $to = $request->query->get('to');
+
+        $fromValue = null;
+        $toValue = null;
+
+        try {
+            if ($from !== null) {
+                $fromValue = (new DateTimeImmutable((string) $from))->format('Y-m-d H:i:sP');
+            }
+            if ($to !== null) {
+                $toValue = (new DateTimeImmutable((string) $to))->format('Y-m-d H:i:sP');
+            }
+        } catch (\Exception $exception) {
+            return $this->jsonError('invalid_range', 'from/to must be valid dates.', 422);
+        }
+
+        $rows = $drafts->listForExport(
+            $userId,
+            $status !== '' ? $status : null,
+            $fromValue,
+            $toValue
+        );
+        $rows = array_map(
+            fn (array $row) => $this->normalizeDates($row, ['created_at', 'updated_at']),
+            $rows
+        );
+
+        $csvRows = array_map(
+            static fn (array $row) => [
+                (string) $row['id'],
+                (string) $row['client_id'],
+                (string) ($row['client_name'] ?? ''),
+                (string) ($row['period_start'] ?? ''),
+                (string) ($row['period_end'] ?? ''),
+                (string) $row['amount_cents'],
+                (string) $row['currency'],
+                (string) $row['status'],
+                (string) $row['created_at'],
+                (string) $row['updated_at'],
+            ],
+            $rows
+        );
+
+        return $this->csvResponse(
+            [
+                'id',
+                'client_id',
+                'client_name',
+                'period_start',
+                'period_end',
+                'amount_cents',
+                'currency',
+                'status',
+                'created_at',
+                'updated_at',
+            ],
+            $csvRows,
+            'invoice-drafts.csv'
+        );
     }
 
     #[Route('/{id}/mark-paid', methods: ['POST'])]
@@ -78,6 +156,40 @@ final class InvoiceDraftController extends BaseApiController
         }
 
         $draft = $drafts->updateStatus($userId, $id, InvoiceDraftStatus::Sent->value);
+        if ($draft === null) {
+            return $this->jsonError('not_found', 'Invoice draft not found.', 404);
+        }
+
+        $draft = $this->normalizeDates($draft, ['created_at', 'updated_at']);
+
+        return $this->jsonSuccess($draft);
+    }
+
+    #[Route('/{id}/void', methods: ['POST'])]
+    public function void(
+        Request $request,
+        InvoiceDraftRepositoryInterface $drafts,
+        int $id
+    ): JsonResponse
+    {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        $draft = $drafts->findById($userId, $id);
+        if ($draft === null) {
+            return $this->jsonError('not_found', 'Invoice draft not found.', 404);
+        }
+
+        if (($draft['status'] ?? null) === InvoiceDraftStatus::Paid->value) {
+            return $this->jsonError('invalid_status', 'Paid invoices cannot be voided.', 409);
+        }
+
+        if (($draft['status'] ?? null) !== InvoiceDraftStatus::Void->value) {
+            $draft = $drafts->updateStatus($userId, $id, InvoiceDraftStatus::Void->value);
+        }
+
         if ($draft === null) {
             return $this->jsonError('not_found', 'Invoice draft not found.', 404);
         }
@@ -195,6 +307,10 @@ final class InvoiceDraftController extends BaseApiController
             return $this->jsonError('not_found', 'Invoice draft not found.', 404);
         }
 
+        if (in_array($draft['status'] ?? null, [InvoiceDraftStatus::Paid->value, InvoiceDraftStatus::Void->value], true)) {
+            return $this->jsonError('invalid_status', 'Payment links are unavailable for paid or void invoices.', 409);
+        }
+
         $existing = $links->findByInvoiceDraft((int) $draft['id']);
         if ($existing !== null) {
             return $this->jsonSuccess($existing);
@@ -204,6 +320,55 @@ final class InvoiceDraftController extends BaseApiController
         if ($amountCents <= 0) {
             return $this->jsonError('invalid_amount', 'Invoice amount must be greater than 0.', 422);
         }
+
+        $currency = (string) $draft['currency'];
+        $description = sprintf('Invoice draft #%d', (int) $draft['id']);
+        $paymentLink = $stripe->createPaymentLink($amountCents, $currency, $description);
+
+        $record = $links->create([
+            'invoice_draft_id' => (int) $draft['id'],
+            'provider' => 'stripe',
+            'provider_id' => $paymentLink['id'],
+            'url' => $paymentLink['url'],
+            'status' => 'active',
+        ]);
+
+        return $this->jsonSuccess($record, 201);
+    }
+
+    #[Route('/{id}/payment-link/refresh', methods: ['POST'])]
+    public function refreshPaymentLink(
+        Request $request,
+        InvoiceDraftRepositoryInterface $drafts,
+        PaymentLinkRepositoryInterface $links,
+        StripeBillingService $stripe,
+        int $id
+    ): JsonResponse
+    {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$stripe->isConfigured()) {
+            return $this->jsonError('not_configured', 'Stripe is not configured.', 409);
+        }
+
+        $draft = $drafts->findById($userId, $id);
+        if ($draft === null) {
+            return $this->jsonError('not_found', 'Invoice draft not found.', 404);
+        }
+
+        if (in_array($draft['status'] ?? null, [InvoiceDraftStatus::Paid->value, InvoiceDraftStatus::Void->value], true)) {
+            return $this->jsonError('invalid_status', 'Payment links are unavailable for paid or void invoices.', 409);
+        }
+
+        $amountCents = (int) $draft['amount_cents'];
+        if ($amountCents <= 0) {
+            return $this->jsonError('invalid_amount', 'Invoice amount must be greater than 0.', 422);
+        }
+
+        $links->deactivateByInvoiceDraft((int) $draft['id']);
 
         $currency = (string) $draft['currency'];
         $description = sprintf('Invoice draft #%d', (int) $draft['id']);

@@ -13,6 +13,7 @@ use DateTimeImmutable;
 use JsonException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api/work-events')]
@@ -163,6 +164,66 @@ final class WorkEventController extends BaseApiController
         );
 
         return $this->jsonSuccess($rows);
+    }
+
+    #[Route('/export', methods: ['GET'])]
+    public function export(Request $request, WorkEventRepositoryInterface $workEvents): Response
+    {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        $from = $request->query->get('from');
+        $to = $request->query->get('to');
+        $clientId = $request->query->get('clientId');
+
+        $fromDate = null;
+        $toDate = null;
+
+        try {
+            if ($from !== null) {
+                $fromDate = new DateTimeImmutable((string) $from);
+            }
+            if ($to !== null) {
+                $toDate = new DateTimeImmutable((string) $to);
+            }
+        } catch (\Exception $exception) {
+            return $this->jsonError('invalid_range', 'from/to must be valid dates.', 422);
+        }
+
+        $rows = $workEvents->listForExport(
+            $userId,
+            $fromDate,
+            $toDate,
+            $clientId !== null ? (int) $clientId : null
+        );
+
+        $rows = array_map(
+            fn (array $row) => $this->normalizeDates($row, ['start_at', 'created_at']),
+            $rows
+        );
+
+        $csvRows = array_map(
+            static fn (array $row) => [
+                (string) $row['id'],
+                (string) $row['client_id'],
+                (string) ($row['client_name'] ?? ''),
+                (string) $row['type'],
+                (string) $row['start_at'],
+                (string) $row['duration_minutes'],
+                isset($row['billable']) && (bool) $row['billable'] ? 'true' : 'false',
+                (string) ($row['notes'] ?? ''),
+                (string) $row['created_at'],
+            ],
+            $rows
+        );
+
+        return $this->csvResponse(
+            ['id', 'client_id', 'client_name', 'type', 'start_at', 'duration_minutes', 'billable', 'notes', 'created_at'],
+            $csvRows,
+            'work-events.csv'
+        );
     }
 
     #[Route('/voice', methods: ['POST'])]

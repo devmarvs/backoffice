@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Api;
 
 use App\Domain\Repository\BillingSubscriptionRepositoryInterface;
+use App\Domain\Repository\BillingWebhookEventRepositoryInterface;
 use App\Domain\Repository\UserRepositoryInterface;
 use App\Infrastructure\Billing\PayPalBillingService;
 use App\Infrastructure\Billing\StripeBillingService;
@@ -194,7 +195,8 @@ final class BillingController extends BaseApiController
     public function webhook(
         Request $request,
         StripeBillingService $stripe,
-        BillingSubscriptionRepositoryInterface $subscriptions
+        BillingSubscriptionRepositoryInterface $subscriptions,
+        BillingWebhookEventRepositoryInterface $webhookEvents
     ): JsonResponse {
         $payload = $request->getContent();
         $signature = $request->headers->get('stripe-signature');
@@ -212,35 +214,58 @@ final class BillingController extends BaseApiController
         $type = $event->type ?? '';
         $data = $event->data->object ?? null;
 
-        if ($type === 'checkout.session.completed' && $data !== null) {
-            $userId = isset($data->client_reference_id) ? (int) $data->client_reference_id : null;
-            if ($userId !== null) {
-                $subscriptions->upsert($userId, 'stripe', [
-                    'customer_id' => $data->customer ?? null,
-                    'subscription_id' => $data->subscription ?? null,
-                    'status' => 'active',
-                    'current_period_end' => null,
-                ]);
-            }
+        $eventId = $event->id ?? null;
+        if ($eventId === null || $eventId === '') {
+            return $this->jsonError('invalid_event', 'Stripe event id is missing.', 400);
         }
 
-        if ($type === 'customer.subscription.updated' || $type === 'customer.subscription.deleted') {
-            if ($data !== null && isset($data->id)) {
-                $record = $subscriptions->findBySubscriptionId('stripe', (string) $data->id);
-                if ($record !== null) {
-                    $currentPeriodEnd = null;
-                    if (isset($data->current_period_end)) {
-                        $currentPeriodEnd = (new DateTimeImmutable())->setTimestamp((int) $data->current_period_end)->format('Y-m-d H:i:sP');
-                    }
+        $payloadData = json_decode($payload, true);
+        if (!is_array($payloadData)) {
+            $payloadData = [];
+        }
 
-                    $subscriptions->upsert((int) $record['user_id'], 'stripe', [
+        $webhookEvents->createIfNotExists('stripe', (string) $eventId, (string) $type, $payloadData);
+        if (!$webhookEvents->markProcessing('stripe', (string) $eventId)) {
+            return $this->jsonSuccess(['received' => true, 'duplicate' => true]);
+        }
+
+        try {
+            if ($type === 'checkout.session.completed' && $data !== null) {
+                $userId = isset($data->client_reference_id) ? (int) $data->client_reference_id : null;
+                if ($userId !== null) {
+                    $subscriptions->upsert($userId, 'stripe', [
                         'customer_id' => $data->customer ?? null,
-                        'subscription_id' => (string) $data->id,
-                        'status' => $type === 'customer.subscription.deleted' ? 'canceled' : (string) $data->status,
-                        'current_period_end' => $currentPeriodEnd,
+                        'subscription_id' => $data->subscription ?? null,
+                        'status' => 'active',
+                        'current_period_end' => null,
                     ]);
                 }
             }
+
+            if ($type === 'customer.subscription.updated' || $type === 'customer.subscription.deleted') {
+                if ($data !== null && isset($data->id)) {
+                    $record = $subscriptions->findBySubscriptionId('stripe', (string) $data->id);
+                    if ($record !== null) {
+                        $currentPeriodEnd = null;
+                        if (isset($data->current_period_end)) {
+                            $currentPeriodEnd = (new DateTimeImmutable())->setTimestamp((int) $data->current_period_end)->format('Y-m-d H:i:sP');
+                        }
+
+                        $subscriptions->upsert((int) $record['user_id'], 'stripe', [
+                            'customer_id' => $data->customer ?? null,
+                            'subscription_id' => (string) $data->id,
+                            'status' => $type === 'customer.subscription.deleted' ? 'canceled' : (string) $data->status,
+                            'current_period_end' => $currentPeriodEnd,
+                        ]);
+                    }
+                }
+            }
+
+            $webhookEvents->markProcessed('stripe', (string) $eventId);
+        } catch (\Throwable $exception) {
+            $webhookEvents->markFailed('stripe', (string) $eventId, $exception->getMessage());
+
+            return $this->jsonError('processing_failed', 'Stripe webhook processing failed.', 500);
         }
 
         return $this->jsonSuccess(['received' => true]);

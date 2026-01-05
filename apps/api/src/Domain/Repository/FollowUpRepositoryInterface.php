@@ -22,4 +22,11 @@ interface FollowUpRepositoryInterface
     public function updateStatus(int $userId, int $followUpId, string $status): ?array;
 
     public function findOpenBySource(int $userId, string $sourceType, int $sourceId): ?array;
+
+    public function listForExport(
+        int $userId,
+        ?string $status,
+        ?DateTimeImmutable $from,
+        ?DateTimeImmutable $to
+    ): array;
 }

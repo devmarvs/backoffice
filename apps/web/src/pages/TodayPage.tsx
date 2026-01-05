@@ -7,6 +7,7 @@ import {
   fetchInvoiceDrafts,
   fetchPackages,
   markFollowUpDone,
+  reopenFollowUp,
   voiceLogWorkEvent,
 } from '../api/client'
 import { useQuickLogStore } from '../state/quickLogStore'
@@ -14,13 +15,14 @@ import { useQuickLogStore } from '../state/quickLogStore'
 export function TodayPage() {
   const openQuickLog = useQuickLogStore((state) => state.open)
   const queryClient = useQueryClient()
+  const [followUpStatus, setFollowUpStatus] = useState<'open' | 'done' | 'dismissed'>('open')
   const invoiceQuery = useQuery({
     queryKey: ['invoice-drafts'],
     queryFn: () => fetchInvoiceDrafts('draft'),
   })
   const followUpQuery = useQuery({
-    queryKey: ['follow-ups'],
-    queryFn: () => fetchFollowUps('open'),
+    queryKey: ['follow-ups', followUpStatus],
+    queryFn: () => fetchFollowUps(followUpStatus),
   })
   const clientsQuery = useQuery({
     queryKey: ['clients', 'all'],
@@ -56,6 +58,13 @@ export function TodayPage() {
 
   const followUpDismissMutation = useMutation({
     mutationFn: dismissFollowUp,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['follow-ups'] })
+    },
+  })
+
+  const followUpReopenMutation = useMutation({
+    mutationFn: reopenFollowUp,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['follow-ups'] })
     },
@@ -132,7 +141,27 @@ export function TodayPage() {
         <div className="card">
           <div className="card-header">
             <h3>Follow-ups due</h3>
-            <span className="chip">Next 3 days</span>
+            <div className="chip-group">
+              {(['open', 'done', 'dismissed'] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`chip-button${followUpStatus === value ? ' active' : ''}`}
+                  onClick={() => setFollowUpStatus(value)}
+                >
+                  {value}
+                </button>
+              ))}
+              <button
+                className="button button--ghost"
+                type="button"
+                onClick={() =>
+                  window.open(`/api/follow-ups/export?status=${followUpStatus}`, '_blank', 'noopener')
+                }
+              >
+                Export CSV
+              </button>
+            </div>
           </div>
           {followUpQuery.isLoading ? (
             <p className="muted">Loading follow-ups...</p>
@@ -148,20 +177,32 @@ export function TodayPage() {
                     </span>
                   </div>
                   <div className="list-actions">
-                    <button
-                      className="button button--ghost"
-                      type="button"
-                      onClick={() => followUpDoneMutation.mutate(followUp.id)}
-                    >
-                      Done
-                    </button>
-                    <button
-                      className="button button--ghost"
-                      type="button"
-                      onClick={() => followUpDismissMutation.mutate(followUp.id)}
-                    >
-                      Dismiss
-                    </button>
+                    {followUp.status === 'open' ? (
+                      <>
+                        <button
+                          className="button button--ghost"
+                          type="button"
+                          onClick={() => followUpDoneMutation.mutate(followUp.id)}
+                        >
+                          Done
+                        </button>
+                        <button
+                          className="button button--ghost"
+                          type="button"
+                          onClick={() => followUpDismissMutation.mutate(followUp.id)}
+                        >
+                          Dismiss
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="button button--ghost"
+                        type="button"
+                        onClick={() => followUpReopenMutation.mutate(followUp.id)}
+                      >
+                        Reopen
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

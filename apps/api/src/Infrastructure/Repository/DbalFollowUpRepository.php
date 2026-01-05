@@ -80,4 +80,39 @@ final class DbalFollowUpRepository implements FollowUpRepositoryInterface
 
         return $row ?: null;
     }
+
+    public function listForExport(
+        int $userId,
+        ?string $status,
+        ?DateTimeImmutable $from,
+        ?DateTimeImmutable $to
+    ): array
+    {
+        $conditions = ['f.user_id = :user_id'];
+        $params = ['user_id' => $userId];
+
+        if ($status !== null && $status !== '') {
+            $conditions[] = 'f.status = :status';
+            $params['status'] = $status;
+        }
+
+        if ($from !== null) {
+            $conditions[] = 'f.due_at >= :from';
+            $params['from'] = $from->format('Y-m-d H:i:sP');
+        }
+
+        if ($to !== null) {
+            $conditions[] = 'f.due_at <= :to';
+            $params['to'] = $to->format('Y-m-d H:i:sP');
+        }
+
+        $sql = 'SELECT f.id, f.client_id, c.name AS client_name, f.due_at, f.suggested_message, f.status,
+                       f.source_type, f.source_id, f.created_at, f.updated_at
+                FROM follow_ups f
+                INNER JOIN clients c ON c.id = f.client_id AND c.user_id = f.user_id
+                WHERE ' . implode(' AND ', $conditions) . '
+                ORDER BY f.due_at ASC';
+
+        return $this->connection->fetchAllAssociative($sql, $params);
+    }
 }
