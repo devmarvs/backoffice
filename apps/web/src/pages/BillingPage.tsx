@@ -70,7 +70,8 @@ export function BillingPage() {
   })
 
   const emailMutation = useMutation({
-    mutationFn: (id: number) => sendInvoiceEmail(id),
+    mutationFn: ({ id, subject, message }: { id: number; subject?: string; message?: string }) =>
+      sendInvoiceEmail(id, { subject, message }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-drafts'] })
       setError(null)
@@ -216,7 +217,21 @@ export function BillingPage() {
                     <button
                       className="button button--ghost"
                       type="button"
-                      onClick={() => emailMutation.mutate(draft.id)}
+                      onClick={() => {
+                        const subject = window.prompt('Email subject', `Invoice #${draft.id}`)
+                        if (subject === null) {
+                          return
+                        }
+                        const message = window.prompt('Email message', '')
+                        if (message === null) {
+                          return
+                        }
+                        emailMutation.mutate({
+                          id: draft.id,
+                          subject: subject.trim() || undefined,
+                          message: message.trim() || undefined,
+                        })
+                      }}
                     >
                       Send email
                     </button>

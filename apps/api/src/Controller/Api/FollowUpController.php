@@ -10,6 +10,7 @@ use App\Domain\Repository\ClientRepositoryInterface;
 use App\Domain\Repository\FollowUpRepositoryInterface;
 use App\Infrastructure\Mail\SimpleMailer;
 use DateTimeImmutable;
+use JsonException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -228,8 +229,21 @@ final class FollowUpController extends BaseApiController
             return $this->jsonError('not_configured', 'Mail sender is not configured.', 409);
         }
 
-        $subject = sprintf('Follow-up for %s', $client['name'] ?? 'your session');
-        $body = (string) ($followUp['suggested_message'] ?? '');
+        try {
+            $payload = $this->parseJson($request);
+        } catch (JsonException $exception) {
+            return $this->jsonError('invalid_json', $exception->getMessage(), 400);
+        }
+
+        $subject = isset($payload['subject']) ? trim((string) $payload['subject']) : '';
+        if ($subject === '') {
+            $subject = sprintf('Follow-up for %s', $client['name'] ?? 'your session');
+        }
+
+        $body = isset($payload['message']) ? trim((string) $payload['message']) : '';
+        if ($body === '') {
+            $body = (string) ($followUp['suggested_message'] ?? '');
+        }
         if ($body === '') {
             $body = 'Just checking in on our recent session.';
         }

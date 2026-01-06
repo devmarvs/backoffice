@@ -492,7 +492,12 @@ export function SettingsPage() {
             <ul className="list">
               {auditQuery.data.map((entry) => (
                 <li key={entry.id}>
-                  <span>{entry.action.replace(/[_.]/g, ' ')}</span>
+                  <span>
+                    {entry.action.replace(/[_.]/g, ' ')}
+                    {entry.metadata ? (
+                      <span className="muted"> — {JSON.stringify(entry.metadata)}</span>
+                    ) : null}
+                  </span>
                   <strong>{new Date(entry.created_at).toLocaleString()}</strong>
                 </li>
               ))}

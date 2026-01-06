@@ -272,6 +272,45 @@ final class BillingController extends BaseApiController
                 }
             }
 
+            if (in_array($type, ['checkout.session.async_payment_failed', 'payment_intent.payment_failed', 'payment_intent.canceled'], true)) {
+                $paymentLinkId = $data->payment_link ?? null;
+                if ($paymentLinkId) {
+                    $this->updatePaymentLinkStatus((string) $paymentLinkId, 'failed', $paymentLinks, $auditLogs);
+                }
+            }
+
+            if (in_array($type, ['charge.refunded', 'charge.refund.updated'], true)) {
+                $paymentLinkId = $data->payment_link ?? null;
+                if ($paymentLinkId) {
+                    $link = $this->updatePaymentLinkStatus((string) $paymentLinkId, 'refunded', $paymentLinks, $auditLogs);
+                    if ($link !== null) {
+                        $auditLogs->add(
+                            (int) $link['user_id'],
+                            'invoice.refunded',
+                            'invoice_draft',
+                            (int) $link['invoice_draft_id'],
+                            ['source' => 'stripe']
+                        );
+                    }
+                }
+            }
+
+            if ($type === 'charge.dispute.created') {
+                $paymentLinkId = $data->payment_link ?? null;
+                if ($paymentLinkId) {
+                    $link = $this->updatePaymentLinkStatus((string) $paymentLinkId, 'disputed', $paymentLinks, $auditLogs);
+                    if ($link !== null) {
+                        $auditLogs->add(
+                            (int) $link['user_id'],
+                            'invoice.disputed',
+                            'invoice_draft',
+                            (int) $link['invoice_draft_id'],
+                            ['source' => 'stripe']
+                        );
+                    }
+                }
+            }
+
             if ($type === 'customer.subscription.updated' || $type === 'customer.subscription.deleted') {
                 if ($data !== null && isset($data->id)) {
                     $record = $subscriptions->findBySubscriptionId('stripe', (string) $data->id);
@@ -299,5 +338,28 @@ final class BillingController extends BaseApiController
         }
 
         return $this->jsonSuccess(['received' => true]);
+    }
+
+    private function updatePaymentLinkStatus(
+        string $providerId,
+        string $status,
+        PaymentLinkRepositoryInterface $paymentLinks,
+        AuditLogRepositoryInterface $auditLogs
+    ): ?array {
+        $link = $paymentLinks->findWithInvoiceByProviderId('stripe', $providerId);
+        if ($link === null) {
+            return null;
+        }
+
+        $paymentLinks->updateStatus((int) $link['id'], $status);
+        $auditLogs->add(
+            (int) $link['user_id'],
+            'payment_link.' . $status,
+            'payment_link',
+            (int) $link['id'],
+            ['invoice_draft_id' => (int) $link['invoice_draft_id']]
+        );
+
+        return $link;
     }
 }

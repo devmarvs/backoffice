@@ -367,9 +367,10 @@ export async function reopenFollowUp(id: number) {
   return apiFetch<FollowUp>(`/api/follow-ups/${id}/reopen`, { method: 'POST' })
 }
 
-export async function sendFollowUpEmail(id: number) {
+export async function sendFollowUpEmail(id: number, payload?: { subject?: string; message?: string }) {
   return apiFetch<{ sent: boolean; follow_up: FollowUp }>(`/api/follow-ups/${id}/email`, {
     method: 'POST',
+    body: JSON.stringify(payload || {}),
   })
 }
 

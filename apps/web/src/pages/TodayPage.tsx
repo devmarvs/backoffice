@@ -45,6 +45,7 @@ export function TodayPage() {
   const [suggestionTo, setSuggestionTo] = useState(() =>
     toDateInput(new Date(Date.now() + 7 * 86400000))
   )
+  const [suggestionFilter, setSuggestionFilter] = useState('')
 
   useEffect(() => {
     if (!packageClientId && clientsQuery.data && clientsQuery.data.length > 0) {
@@ -91,7 +92,8 @@ export function TodayPage() {
   })
 
   const followUpEmailMutation = useMutation({
-    mutationFn: sendFollowUpEmail,
+    mutationFn: ({ id, subject, message }: { id: number; subject?: string; message?: string }) =>
+      sendFollowUpEmail(id, { subject, message }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['follow-ups'] })
     },
@@ -128,6 +130,29 @@ export function TodayPage() {
     clientsQuery.data?.forEach((client) => map.set(client.id, client.name))
     return map
   }, [clientsQuery.data])
+
+  const suggestionRows = useMemo(() => {
+    const suggestions = suggestionsQuery.data ?? []
+    const clients = clientsQuery.data ?? []
+    const filterText = suggestionFilter.trim().toLowerCase()
+
+    return suggestions
+      .map((event) => {
+        const summary = (event.summary || '').toLowerCase()
+        const matchedClient = clients.find((client) =>
+          summary.includes(client.name.toLowerCase())
+        )
+        return { event, matchedClient }
+      })
+      .filter(({ event, matchedClient }) => {
+        if (filterText === '') {
+          return true
+        }
+        const summary = (event.summary || '').toLowerCase()
+        const clientName = matchedClient?.name.toLowerCase() || ''
+        return summary.includes(filterText) || clientName.includes(filterText)
+      })
+  }, [clientsQuery.data, suggestionFilter, suggestionsQuery.data])
 
   return (
     <div className="page">
@@ -255,7 +280,29 @@ export function TodayPage() {
                         <button
                           className="button button--ghost"
                           type="button"
-                          onClick={() => followUpEmailMutation.mutate(followUp.id)}
+                          onClick={() => {
+                            const clientName =
+                              clientNameById.get(followUp.client_id) ?? 'your session'
+                            const subject = window.prompt(
+                              'Email subject',
+                              `Follow-up for ${clientName}`
+                            )
+                            if (subject === null) {
+                              return
+                            }
+                            const message = window.prompt(
+                              'Email message',
+                              followUp.suggested_message || ''
+                            )
+                            if (message === null) {
+                              return
+                            }
+                            followUpEmailMutation.mutate({
+                              id: followUp.id,
+                              subject: subject.trim() || undefined,
+                              message: message.trim() || undefined,
+                            })
+                          }}
                         >
                           Email
                         </button>
@@ -342,6 +389,15 @@ export function TodayPage() {
                 </select>
               </label>
               <label className="field">
+                <span>Filter by name</span>
+                <input
+                  type="text"
+                  value={suggestionFilter}
+                  onChange={(event) => setSuggestionFilter(event.target.value)}
+                  placeholder="Search summary or client"
+                />
+              </label>
+              <label className="field">
                 <span>From</span>
                 <input
                   type="date"
@@ -359,24 +415,31 @@ export function TodayPage() {
               </label>
               {suggestionsQuery.isLoading ? (
                 <p className="muted">Loading suggestions...</p>
-              ) : suggestionsQuery.data && suggestionsQuery.data.length > 0 ? (
+              ) : suggestionRows.length > 0 ? (
                 <ul className="list">
-                  {suggestionsQuery.data.slice(0, 3).map((event) => (
+                  {suggestionRows.slice(0, 3).map(({ event, matchedClient }) => (
                     <li key={event.id} className="list-row">
                       <div className="list-row-main">
                         <span>{event.summary || 'Untitled event'}</span>
                         <span className="muted">
                           {new Date(event.start_at).toLocaleString()}
                         </span>
+                        {matchedClient ? (
+                          <span className="muted">Matched client: {matchedClient.name}</span>
+                        ) : null}
                       </div>
                       <div className="list-actions">
                         <button
                           className="button button--ghost"
                           type="button"
-                          disabled={!suggestionClientId || suggestionLogMutation.isPending}
+                          disabled={
+                            (!suggestionClientId && !matchedClient) ||
+                            suggestionLogMutation.isPending
+                          }
                           onClick={() => {
-                            if (suggestionClientId) {
-                              suggestionLogMutation.mutate({ id: event.id, clientId: suggestionClientId })
+                            const clientId = matchedClient?.id ?? suggestionClientId
+                            if (clientId) {
+                              suggestionLogMutation.mutate({ id: event.id, clientId })
                             }
                           }}
                         >

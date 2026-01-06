@@ -37,9 +37,40 @@ services:
       GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
       GOOGLE_SUCCESS_REDIRECT: ${GOOGLE_SUCCESS_REDIRECT:-}
       GOOGLE_FAILURE_REDIRECT: ${GOOGLE_FAILURE_REDIRECT:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      MAIL_BCC: ${MAIL_BCC:-}
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-mail}
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}
+      MAIL_SMTP_USER: ${MAIL_SMTP_USER:-}
+      MAIL_SMTP_PASSWORD: ${MAIL_SMTP_PASSWORD:-}
+      MAIL_SMTP_ENCRYPTION: ${MAIL_SMTP_ENCRYPTION:-tls}
+      MAIL_SMTP_TIMEOUT: ${MAIL_SMTP_TIMEOUT:-10}
     networks:
       - default
       - invokardex-net
+
+  reminders:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+      args:
+        FRANKENPHP_IMAGE: ${FRANKENPHP_IMAGE:-dunglas/frankenphp:latest}
+    volumes:
+      - ./apps/api:/app
+      - api_var:/app/var
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      APP_SECRET: ${APP_SECRET:-change_me}
+      DATABASE_URL: ${DATABASE_URL}
+      FOLLOW_UP_DAYS: ${FOLLOW_UP_DAYS:-3}
+      INVOICE_REMINDER_DAYS: ${INVOICE_REMINDER_DAYS:-7}
+    command: sh -c "while true; do php /app/bin/console app:reminders:run; sleep ${REMINDER_INTERVAL_SECONDS:-3600}; done"
+    depends_on:
+      - api
+    networks:
+      - default
 
   web:
     image: node:20-alpine

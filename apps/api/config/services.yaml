@@ -33,6 +33,13 @@ parameters:
     app.mail_from: '%env(default::MAIL_FROM)%'
     app.mail_reply_to: '%env(default::MAIL_REPLY_TO)%'
     app.mail_bcc: '%env(default::MAIL_BCC)%'
+    app.mail_transport: '%env(default:mail:MAIL_TRANSPORT)%'
+    app.mail_smtp_host: '%env(default::MAIL_SMTP_HOST)%'
+    app.mail_smtp_port: '%env(int:default:587:MAIL_SMTP_PORT)%'
+    app.mail_smtp_user: '%env(default::MAIL_SMTP_USER)%'
+    app.mail_smtp_password: '%env(default::MAIL_SMTP_PASSWORD)%'
+    app.mail_smtp_encryption: '%env(default:tls:MAIL_SMTP_ENCRYPTION)%'
+    app.mail_smtp_timeout: '%env(int:default:10:MAIL_SMTP_TIMEOUT)%'
 
 services:
     # default configuration for services in *this* file

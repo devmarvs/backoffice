@@ -11,13 +11,28 @@ final class SimpleMailer
     public function __construct(
         #[Autowire('%app.mail_from%')] private string $from,
         #[Autowire('%app.mail_reply_to%')] private string $replyTo,
-        #[Autowire('%app.mail_bcc%')] private string $bcc
+        #[Autowire('%app.mail_bcc%')] private string $bcc,
+        #[Autowire('%app.mail_transport%')] private string $transport,
+        #[Autowire('%app.mail_smtp_host%')] private string $smtpHost,
+        #[Autowire('%app.mail_smtp_port%')] private int $smtpPort,
+        #[Autowire('%app.mail_smtp_user%')] private string $smtpUser,
+        #[Autowire('%app.mail_smtp_password%')] private string $smtpPassword,
+        #[Autowire('%app.mail_smtp_encryption%')] private string $smtpEncryption,
+        #[Autowire('%app.mail_smtp_timeout%')] private int $smtpTimeout
     ) {
     }
 
     public function isConfigured(): bool
     {
-        return $this->from !== '';
+        if ($this->from === '') {
+            return false;
+        }
+
+        if (strtolower($this->transport) === 'smtp') {
+            return $this->smtpHost !== '';
+        }
+
+        return true;
     }
 
     public function send(
@@ -70,6 +85,26 @@ final class SimpleMailer
             $message .= '--' . $boundary . '--';
         } else {
             $headers[] = 'Content-Type: text/plain; charset=UTF-8';
+        }
+
+        $transport = strtolower($this->transport);
+        if ($transport === 'smtp') {
+            $smtp = new SmtpClient(
+                $this->smtpHost,
+                $this->smtpPort,
+                $this->smtpUser,
+                $this->smtpPassword,
+                $this->smtpEncryption,
+                $this->smtpTimeout
+            );
+            $smtp->send(
+                $this->from,
+                $to,
+                $subject,
+                implode("\r\n", $headers),
+                $message
+            );
+            return;
         }
 
         $success = mail($to, $subject, $message, implode("\r\n", $headers));

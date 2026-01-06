@@ -63,6 +63,7 @@ The Vite dev server proxies `/api` to the API container. Open:
 - The API uses session cookies for auth. The Vite dev server proxies requests so no CORS setup is required for local dev.
 - Default follow-up delay is controlled by `FOLLOW_UP_DAYS` in `.env` (default: `3`).
 - Invoice reminder creation uses `INVOICE_REMINDER_DAYS` (default: `7`).
+- The reminders worker runs via the `reminders` service in `docker-compose.yml`. Set `REMINDER_INTERVAL_SECONDS` (default: `3600`) to control how often it runs, or run `php bin/console app:reminders:run` manually.
 - PHP 8.5 is not released yet; the Docker image defaults to the latest FrankenPHP tag. Override with `FRANKENPHP_IMAGE` in `.env` if you need a specific PHP version.
 - If `rate_cents` is not provided when logging a billable session, invoice drafts are created with a 0 amount.
 
@@ -105,8 +106,15 @@ Email (system mailer):
 - `MAIL_FROM`
 - `MAIL_REPLY_TO` (optional)
 - `MAIL_BCC` (optional)
+- `MAIL_TRANSPORT` (`mail` or `smtp`)
+- `MAIL_SMTP_HOST` (required for SMTP)
+- `MAIL_SMTP_PORT` (default: 587)
+- `MAIL_SMTP_USER` (optional)
+- `MAIL_SMTP_PASSWORD` (optional)
+- `MAIL_SMTP_ENCRYPTION` (`tls`, `ssl`, or empty)
+- `MAIL_SMTP_TIMEOUT` (seconds)
 
-Note: the API uses PHP's `mail()` function. In Docker, configure a sendmail-compatible binary if you want delivery.
+Note: `MAIL_TRANSPORT=mail` uses PHP's `mail()` function. In Docker, configure a sendmail-compatible binary if you want delivery.
 
 ## Key API routes
 
