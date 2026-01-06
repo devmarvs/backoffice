@@ -29,20 +29,10 @@ final class ReminderService
         $settings = $this->settings->getByUserId($userId);
         $reminderDays = $settings['invoice_reminder_days'] ?? $this->defaultReminderDays;
         $reminderDaysValue = $reminderDays === null ? null : (int) $reminderDays;
+        $runAt = new DateTimeImmutable();
 
         if ($reminderDays === null || (int) $reminderDays <= 0) {
-            $this->settings->updateLastReminderRun($userId, new DateTimeImmutable());
-            $this->auditLogs->add(
-                $userId,
-                'reminders.run',
-                'reminder_run',
-                null,
-                [
-                    'created' => 0,
-                    'reminder_days' => $reminderDaysValue,
-                    'disabled' => true,
-                ]
-            );
+            $this->recordRun($userId, $runAt, 0, $reminderDaysValue, true);
             return 0;
         }
 
@@ -91,18 +81,29 @@ final class ReminderService
             $count++;
         }
 
-        $this->settings->updateLastReminderRun($userId, new DateTimeImmutable());
-        $this->auditLogs->add(
-            $userId,
-            'reminders.run',
-            'reminder_run',
-            null,
-            [
-                'created' => $count,
-                'reminder_days' => $reminderDaysValue,
-            ]
-        );
+        $this->recordRun($userId, $runAt, $count, $reminderDaysValue, false);
 
         return $count;
+    }
+
+    private function recordRun(
+        int $userId,
+        DateTimeImmutable $runAt,
+        int $created,
+        ?int $reminderDays,
+        bool $disabled
+    ): void {
+        $this->settings->updateLastReminderRun($userId, $runAt);
+
+        $metadata = [
+            'created' => $created,
+            'reminder_days' => $reminderDays,
+        ];
+
+        if ($disabled) {
+            $metadata['disabled'] = true;
+        }
+
+        $this->auditLogs->add($userId, 'reminders.run', 'reminder_run', null, $metadata);
     }
 }
