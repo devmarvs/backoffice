@@ -145,3 +145,5 @@ Note: `MAIL_TRANSPORT=mail` uses PHP's `mail()` function. In Docker, configure a
 - `GET /api/calendar/suggestions?from=&to=`
 - `POST /api/calendar/events/{id}/log`
 - `GET /api/audit-logs?limit=`
+- `GET /api/integrations/google/status`
+- `GET /api/reports/summary?from=&to=&clientId=`

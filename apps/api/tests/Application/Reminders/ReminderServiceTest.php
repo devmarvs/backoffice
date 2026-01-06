@@ -6,6 +6,7 @@ namespace App\Tests\Application\Reminders;
 
 use App\Application\Reminders\ReminderService;
 use App\Application\Templates\TemplateService;
+use App\Domain\Repository\AuditLogRepositoryInterface;
 use App\Domain\Repository\FollowUpRepositoryInterface;
 use App\Domain\Repository\InvoiceDraftRepositoryInterface;
 use App\Domain\Repository\MessageTemplateRepositoryInterface;
@@ -18,11 +19,13 @@ final class ReminderServiceTest extends TestCase
     public function testRunRecordsLastRunWhenDisabled(): void
     {
         $settings = new StubSettingsRepository(['invoice_reminder_days' => 0]);
+        $auditLogs = new StubAuditLogRepository();
         $service = new ReminderService(
             new StubInvoiceDraftRepository([]),
             new StubFollowUpRepository(),
             $settings,
             new TemplateService(new StubMessageTemplateRepository()),
+            $auditLogs,
             7
         );
 
@@ -30,6 +33,8 @@ final class ReminderServiceTest extends TestCase
 
         self::assertSame(0, $count);
         self::assertNotNull($settings->lastRunAt);
+        self::assertCount(1, $auditLogs->entries);
+        self::assertSame('reminders.run', $auditLogs->entries[0]['action']);
     }
 
     public function testRunCreatesReminderAndUpdatesLastRun(): void
@@ -45,12 +50,14 @@ final class ReminderServiceTest extends TestCase
             ],
         ]);
         $followUps = new StubFollowUpRepository();
+        $auditLogs = new StubAuditLogRepository();
 
         $service = new ReminderService(
             $drafts,
             $followUps,
             $settings,
             new TemplateService(new StubMessageTemplateRepository()),
+            $auditLogs,
             7
         );
 
@@ -59,6 +66,8 @@ final class ReminderServiceTest extends TestCase
         self::assertSame(1, $count);
         self::assertSame(1, $followUps->created);
         self::assertNotNull($settings->lastRunAt);
+        self::assertCount(1, $auditLogs->entries);
+        self::assertSame(1, $auditLogs->entries[0]['metadata']['created']);
     }
 }
 
@@ -197,6 +206,27 @@ final class StubSettingsRepository implements UserSettingsRepositoryInterface
     public function updateLastReminderRun(int $userId, DateTimeImmutable $runAt): void
     {
         $this->lastRunAt = $runAt;
+    }
+}
+
+final class StubAuditLogRepository implements AuditLogRepositoryInterface
+{
+    public array $entries = [];
+
+    public function add(int $userId, string $action, string $entityType, ?int $entityId, array $metadata = []): void
+    {
+        $this->entries[] = [
+            'user_id' => $userId,
+            'action' => $action,
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
+            'metadata' => $metadata,
+        ];
+    }
+
+    public function listRecent(int $userId, int $limit): array
+    {
+        throw new \BadMethodCallException('Not used.');
     }
 }
 

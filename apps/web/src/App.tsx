@@ -8,6 +8,7 @@ import { ClientsPage } from './pages/ClientsPage'
 import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { OnboardingPage } from './pages/OnboardingPage'
+import { ReportsPage } from './pages/ReportsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { TodayPage } from './pages/TodayPage'
 
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="clients" element={<ClientsPage />} />
           <Route path="clients/:id" element={<ClientPage />} />
           <Route path="billing" element={<BillingPage />} />
+          <Route path="reports" element={<ReportsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

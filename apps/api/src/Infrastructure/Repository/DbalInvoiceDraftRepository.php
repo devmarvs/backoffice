@@ -76,10 +76,19 @@ final class DbalInvoiceDraftRepository implements InvoiceDraftRepositoryInterfac
     public function listByStatus(int $userId, string $status): array
     {
         return $this->connection->fetchAllAssociative(
-            'SELECT id, user_id, client_id, period_start, period_end, amount_cents, currency, status, created_at, updated_at
-             FROM invoice_drafts
-             WHERE user_id = :user_id AND status = :status
-             ORDER BY created_at DESC',
+            'SELECT d.id, d.user_id, d.client_id, d.period_start, d.period_end, d.amount_cents, d.currency, d.status,
+                    d.created_at, d.updated_at,
+                    pl.url AS payment_link_url, pl.status AS payment_link_status, pl.updated_at AS payment_link_updated_at
+             FROM invoice_drafts d
+             LEFT JOIN LATERAL (
+                SELECT url, status, updated_at
+                FROM payment_links
+                WHERE invoice_draft_id = d.id
+                ORDER BY created_at DESC
+                LIMIT 1
+             ) pl ON true
+             WHERE d.user_id = :user_id AND d.status = :status
+             ORDER BY d.created_at DESC',
             ['user_id' => $userId, 'status' => $status]
         );
     }

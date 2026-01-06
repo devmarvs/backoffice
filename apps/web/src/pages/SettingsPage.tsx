@@ -7,6 +7,7 @@ import {
   disconnectGoogle,
   fetchAuditLogs,
   fetchBillingStatus,
+  fetchGoogleStatus,
   fetchPayPalStatus,
   fetchCalendarEvents,
   fetchReferrals,
@@ -71,6 +72,10 @@ export function SettingsPage() {
     queryKey: ['calendar-events'],
     queryFn: () => fetchCalendarEvents({}),
     enabled: showCalendar,
+  })
+  const googleStatusQuery = useQuery({
+    queryKey: ['google-status'],
+    queryFn: fetchGoogleStatus,
   })
   const auditQuery = useQuery({
     queryKey: ['audit-logs'],
@@ -226,6 +231,7 @@ export function SettingsPage() {
       setSuccess(`Imported ${result.imported} calendar events.`)
       setError(null)
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] })
+      queryClient.invalidateQueries({ queryKey: ['google-status'] })
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : 'Calendar sync failed.')
@@ -239,6 +245,7 @@ export function SettingsPage() {
       setSuccess('Disconnected Google Calendar.')
       setError(null)
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] })
+      queryClient.invalidateQueries({ queryKey: ['google-status'] })
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : 'Could not disconnect.')
@@ -578,6 +585,20 @@ export function SettingsPage() {
             <span className="chip">Google Calendar</span>
           </div>
           <div className="stack">
+            <p className="muted">
+              Status: {googleStatusQuery.data?.connected ? 'connected' : 'not connected'}
+            </p>
+            {googleStatusQuery.data?.last_sync_at ? (
+              <p className="muted">
+                Last sync: {new Date(googleStatusQuery.data.last_sync_at).toLocaleString()}
+              </p>
+            ) : null}
+            {googleStatusQuery.data?.synced_from && googleStatusQuery.data?.synced_to ? (
+              <p className="muted">
+                Window: {new Date(googleStatusQuery.data.synced_from).toLocaleDateString()} ->{' '}
+                {new Date(googleStatusQuery.data.synced_to).toLocaleDateString()}
+              </p>
+            ) : null}
             <button
               className="button button--ghost"
               type="button"

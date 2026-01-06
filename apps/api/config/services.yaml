@@ -69,4 +69,5 @@ services:
     App\Domain\Repository\AuditLogRepositoryInterface: '@App\Infrastructure\Repository\DbalAuditLogRepository'
     App\Domain\Repository\IntegrationRepositoryInterface: '@App\Infrastructure\Repository\DbalIntegrationRepository'
     App\Domain\Repository\CalendarEventRepositoryInterface: '@App\Infrastructure\Repository\DbalCalendarEventRepository'
+    App\Domain\Repository\ReportingRepositoryInterface: '@App\Infrastructure\Repository\DbalReportingRepository'
     App\Domain\Repository\ReferralRepositoryInterface: '@App\Infrastructure\Repository\DbalReferralRepository'

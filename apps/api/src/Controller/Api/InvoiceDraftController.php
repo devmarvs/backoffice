@@ -39,7 +39,7 @@ final class InvoiceDraftController extends BaseApiController
 
         $rows = $drafts->listByStatus($userId, (string) $status);
         $rows = array_map(
-            fn (array $row) => $this->normalizeDates($row, ['created_at', 'updated_at']),
+            fn (array $row) => $this->normalizeDates($row, ['created_at', 'updated_at', 'payment_link_updated_at']),
             $rows
         );
 

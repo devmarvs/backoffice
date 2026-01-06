@@ -17,6 +17,9 @@ export function AppShell() {
     if (path.startsWith('/app/billing')) {
       return { eyebrow: 'Billing', title: 'Turn sessions into invoices.' }
     }
+    if (path.startsWith('/app/reports')) {
+      return { eyebrow: 'Reporting', title: 'Measure progress at a glance.' }
+    }
     if (path.startsWith('/app/settings')) {
       return { eyebrow: 'Settings', title: 'Tune your autopilot.' }
     }
@@ -42,6 +45,9 @@ export function AppShell() {
           </NavLink>
           <NavLink className={linkClass} to="/app/billing">
             Billing
+          </NavLink>
+          <NavLink className={linkClass} to="/app/reports">
+            Reports
           </NavLink>
           <NavLink className={linkClass} to="/app/settings">
             Settings

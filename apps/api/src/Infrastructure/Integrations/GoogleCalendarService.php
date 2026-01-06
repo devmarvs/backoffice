@@ -68,28 +68,28 @@ final class GoogleCalendarService
             throw new \RuntimeException('Google Calendar is not connected.');
         }
 
+        $metadata = $this->decodeMetadata($integration['metadata'] ?? null);
+        $metadata['calendar_id'] = $this->calendarId;
+
+        $accessToken = (string) $integration['access_token'];
+        $refreshToken = $integration['refresh_token'] ?? null;
+        $expiresAt = $integration['expires_at'] ?? null;
+
         $client = $this->buildClient();
         $client->setAccessToken([
-            'access_token' => $integration['access_token'],
-            'refresh_token' => $integration['refresh_token'],
-            'expires_at' => isset($integration['expires_at']) ? strtotime((string) $integration['expires_at']) : null,
+            'access_token' => $accessToken,
+            'refresh_token' => $refreshToken,
+            'expires_at' => $expiresAt !== null ? strtotime((string) $expiresAt) : null,
         ]);
 
-        if ($client->isAccessTokenExpired() && !empty($integration['refresh_token'])) {
-            $token = $client->fetchAccessTokenWithRefreshToken($integration['refresh_token']);
+        if ($client->isAccessTokenExpired() && !empty($refreshToken)) {
+            $token = $client->fetchAccessTokenWithRefreshToken((string) $refreshToken);
             if (!isset($token['error']) && isset($token['access_token'])) {
-                $expiresAt = null;
-                if (isset($token['expires_in'])) {
-                    $expiresAt = (new DateTimeImmutable())->modify(sprintf('+%d seconds', (int) $token['expires_in']))
-                        ->format('Y-m-d H:i:sP');
-                }
-
-                $this->integrations->upsert($userId, 'google_calendar', [
-                    'access_token' => $token['access_token'],
-                    'refresh_token' => $integration['refresh_token'],
-                    'expires_at' => $expiresAt,
-                    'metadata' => ['calendar_id' => $this->calendarId],
-                ]);
+                $accessToken = $token['access_token'];
+                $expiresAt = isset($token['expires_in'])
+                    ? (new DateTimeImmutable())->modify(sprintf('+%d seconds', (int) $token['expires_in']))
+                        ->format('Y-m-d H:i:sP')
+                    : null;
             }
         }
 
@@ -124,7 +124,20 @@ final class GoogleCalendarService
             ];
         }
 
-        return $this->events->upsertEvents($userId, 'google_calendar', $payload);
+        $count = $this->events->upsertEvents($userId, 'google_calendar', $payload);
+
+        $metadata['last_sync_at'] = (new DateTimeImmutable())->format(DateTimeImmutable::ATOM);
+        $metadata['synced_from'] = $from->format(DateTimeImmutable::ATOM);
+        $metadata['synced_to'] = $to->format(DateTimeImmutable::ATOM);
+
+        $this->integrations->upsert($userId, 'google_calendar', [
+            'access_token' => $accessToken,
+            'refresh_token' => $refreshToken,
+            'expires_at' => $expiresAt,
+            'metadata' => $metadata,
+        ]);
+
+        return $count;
     }
 
     private function buildClient(): Client
@@ -138,5 +151,15 @@ final class GoogleCalendarService
         $client->setPrompt('consent');
 
         return $client;
+    }
+
+    private function decodeMetadata(?string $metadata): array
+    {
+        if ($metadata === null || $metadata === '') {
+            return [];
+        }
+
+        $decoded = json_decode($metadata, true);
+        return is_array($decoded) ? $decoded : [];
     }
 }

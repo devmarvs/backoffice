@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Reminders;
 
 use App\Application\Templates\TemplateService;
+use App\Domain\Repository\AuditLogRepositoryInterface;
 use App\Domain\Repository\FollowUpRepositoryInterface;
 use App\Domain\Repository\InvoiceDraftRepositoryInterface;
 use App\Domain\Repository\UserSettingsRepositoryInterface;
@@ -18,6 +19,7 @@ final class ReminderService
         private FollowUpRepositoryInterface $followUps,
         private UserSettingsRepositoryInterface $settings,
         private TemplateService $templates,
+        private AuditLogRepositoryInterface $auditLogs,
         #[Autowire('%app.invoice_reminder_days%')] private int $defaultReminderDays
     ) {
     }
@@ -26,9 +28,21 @@ final class ReminderService
     {
         $settings = $this->settings->getByUserId($userId);
         $reminderDays = $settings['invoice_reminder_days'] ?? $this->defaultReminderDays;
+        $reminderDaysValue = $reminderDays === null ? null : (int) $reminderDays;
 
         if ($reminderDays === null || (int) $reminderDays <= 0) {
             $this->settings->updateLastReminderRun($userId, new DateTimeImmutable());
+            $this->auditLogs->add(
+                $userId,
+                'reminders.run',
+                'reminder_run',
+                null,
+                [
+                    'created' => 0,
+                    'reminder_days' => $reminderDaysValue,
+                    'disabled' => true,
+                ]
+            );
             return 0;
         }
 
@@ -78,6 +92,16 @@ final class ReminderService
         }
 
         $this->settings->updateLastReminderRun($userId, new DateTimeImmutable());
+        $this->auditLogs->add(
+            $userId,
+            'reminders.run',
+            'reminder_run',
+            null,
+            [
+                'created' => $count,
+                'reminder_days' => $reminderDaysValue,
+            ]
+        );
 
         return $count;
     }

@@ -91,6 +91,36 @@ final class IntegrationController extends BaseApiController
         return $this->jsonSuccess(['imported' => $count]);
     }
 
+    #[Route('/status', methods: ['GET'])]
+    public function status(Request $request, IntegrationRepositoryInterface $integrations): JsonResponse
+    {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        $integration = $integrations->findByUserAndProvider($userId, 'google_calendar');
+        if ($integration === null) {
+            return $this->jsonSuccess(['connected' => false]);
+        }
+
+        $metadata = [];
+        if (isset($integration['metadata']) && $integration['metadata'] !== '') {
+            $decoded = json_decode((string) $integration['metadata'], true);
+            if (is_array($decoded)) {
+                $metadata = $decoded;
+            }
+        }
+
+        return $this->jsonSuccess([
+            'connected' => true,
+            'calendar_id' => $metadata['calendar_id'] ?? null,
+            'last_sync_at' => $metadata['last_sync_at'] ?? null,
+            'synced_from' => $metadata['synced_from'] ?? null,
+            'synced_to' => $metadata['synced_to'] ?? null,
+        ]);
+    }
+
     #[Route('', methods: ['DELETE'])]
     public function disconnect(Request $request, IntegrationRepositoryInterface $integrations): JsonResponse
     {

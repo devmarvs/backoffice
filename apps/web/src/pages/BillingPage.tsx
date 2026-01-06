@@ -170,10 +170,15 @@ export function BillingPage() {
           <div className="table">
             {invoiceQuery.data.map((draft) => (
               <div key={draft.id} className="table-row">
-                <span>
-                  {draft.status.toUpperCase()} #{draft.id} -{' '}
-                  {clientNameById.get(draft.client_id) ?? `Client ${draft.client_id}`}
-                </span>
+                <div>
+                  <div>
+                    {draft.status.toUpperCase()} #{draft.id} -{' '}
+                    {clientNameById.get(draft.client_id) ?? `Client ${draft.client_id}`}
+                  </div>
+                  <div className="muted">
+                    Link: {draft.payment_link_status ? draft.payment_link_status : 'none'}
+                  </div>
+                </div>
                 <span>{draft.currency}</span>
                 <strong>{(draft.amount_cents / 100).toFixed(2)}</strong>
                 <div className="row-actions">

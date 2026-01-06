@@ -73,6 +73,9 @@ export type InvoiceDraft = {
   status: string
   created_at: string
   updated_at: string
+  payment_link_url?: string | null
+  payment_link_status?: string | null
+  payment_link_updated_at?: string | null
 }
 
 export type InvoiceLine = {
@@ -121,6 +124,26 @@ export type UserSettings = {
   onboarding_note?: string | null
   created_at?: string
   updated_at?: string
+}
+
+export type GoogleIntegrationStatus = {
+  connected: boolean
+  calendar_id?: string | null
+  last_sync_at?: string | null
+  synced_from?: string | null
+  synced_to?: string | null
+}
+
+export type ReportSummary = {
+  invoice_totals: Record<string, { count: number; amounts: Record<string, number> }>
+  work_events: {
+    total_minutes: number
+    billable_minutes: number
+    non_billable_minutes: number
+    total_sessions: number
+    billable_sessions: number
+    non_billable_sessions: number
+  }
 }
 
 export type MessageTemplate = {
@@ -482,6 +505,10 @@ export async function syncGoogleCalendar() {
   return apiFetch<{ imported: number }>(`/api/integrations/google/sync`, { method: 'POST' })
 }
 
+export async function fetchGoogleStatus() {
+  return apiFetch<GoogleIntegrationStatus>(`/api/integrations/google/status`)
+}
+
 export async function disconnectGoogle() {
   return apiFetch<{ disconnected: boolean }>(`/api/integrations/google`, { method: 'DELETE' })
 }
@@ -517,6 +544,19 @@ export async function logWorkEventFromCalendar(
 
 export async function fetchAuditLogs(limit = 10) {
   return apiFetch<AuditLog[]>(`/api/audit-logs?limit=${encodeURIComponent(String(limit))}`)
+}
+
+export async function fetchReportSummary(params: {
+  from?: string
+  to?: string
+  clientId?: number
+}) {
+  const query = new URLSearchParams()
+  if (params.from) query.set('from', params.from)
+  if (params.to) query.set('to', params.to)
+  if (params.clientId) query.set('clientId', String(params.clientId))
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return apiFetch<ReportSummary>(`/api/reports/summary${suffix}`)
 }
 
 export async function fetchReferrals() {
