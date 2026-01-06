@@ -595,7 +595,7 @@ export function SettingsPage() {
             ) : null}
             {googleStatusQuery.data?.synced_from && googleStatusQuery.data?.synced_to ? (
               <p className="muted">
-                Window: {new Date(googleStatusQuery.data.synced_from).toLocaleDateString()} ->{' '}
+                Window: {new Date(googleStatusQuery.data.synced_from).toLocaleDateString()} to{' '}
                 {new Date(googleStatusQuery.data.synced_to).toLocaleDateString()}
               </p>
             ) : null}
