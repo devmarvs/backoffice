@@ -6,6 +6,7 @@ namespace App\Controller\Api;
 
 use App\Infrastructure\Integrations\GoogleCalendarService;
 use App\Domain\Repository\IntegrationRepositoryInterface;
+use App\Application\Billing\BillingAccessService;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -22,11 +23,19 @@ final class IntegrationController extends BaseApiController
     }
 
     #[Route('/connect', methods: ['GET'])]
-    public function connect(Request $request, GoogleCalendarService $google): JsonResponse
+    public function connect(
+        Request $request,
+        GoogleCalendarService $google,
+        BillingAccessService $billingAccess
+    ): JsonResponse
     {
         $userId = $this->requireUserId($request);
         if ($userId === null) {
             return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$billingAccess->hasProAccess($userId)) {
+            return $this->jsonError('plan_required', 'Pro plan required for Google Calendar integration.', 403);
         }
 
         if (!$google->isConfigured()) {
@@ -45,10 +54,18 @@ final class IntegrationController extends BaseApiController
     }
 
     #[Route('/callback', methods: ['GET'])]
-    public function callback(Request $request, GoogleCalendarService $google): RedirectResponse
+    public function callback(
+        Request $request,
+        GoogleCalendarService $google,
+        BillingAccessService $billingAccess
+    ): RedirectResponse
     {
         $userId = $this->requireUserId($request);
         if ($userId === null) {
+            return new RedirectResponse($this->failureRedirect, 302);
+        }
+
+        if (!$billingAccess->hasProAccess($userId)) {
             return new RedirectResponse($this->failureRedirect, 302);
         }
 
@@ -71,11 +88,19 @@ final class IntegrationController extends BaseApiController
     }
 
     #[Route('/sync', methods: ['POST'])]
-    public function sync(Request $request, GoogleCalendarService $google): JsonResponse
+    public function sync(
+        Request $request,
+        GoogleCalendarService $google,
+        BillingAccessService $billingAccess
+    ): JsonResponse
     {
         $userId = $this->requireUserId($request);
         if ($userId === null) {
             return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$billingAccess->hasProAccess($userId)) {
+            return $this->jsonError('plan_required', 'Pro plan required for Google Calendar integration.', 403);
         }
 
         if (!$google->isConfigured()) {
@@ -92,11 +117,19 @@ final class IntegrationController extends BaseApiController
     }
 
     #[Route('/status', methods: ['GET'])]
-    public function status(Request $request, IntegrationRepositoryInterface $integrations): JsonResponse
+    public function status(
+        Request $request,
+        IntegrationRepositoryInterface $integrations,
+        BillingAccessService $billingAccess
+    ): JsonResponse
     {
         $userId = $this->requireUserId($request);
         if ($userId === null) {
             return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$billingAccess->hasProAccess($userId)) {
+            return $this->jsonError('plan_required', 'Pro plan required for Google Calendar integration.', 403);
         }
 
         $integration = $integrations->findByUserAndProvider($userId, 'google_calendar');
@@ -122,11 +155,19 @@ final class IntegrationController extends BaseApiController
     }
 
     #[Route('', methods: ['DELETE'])]
-    public function disconnect(Request $request, IntegrationRepositoryInterface $integrations): JsonResponse
+    public function disconnect(
+        Request $request,
+        IntegrationRepositoryInterface $integrations,
+        BillingAccessService $billingAccess
+    ): JsonResponse
     {
         $userId = $this->requireUserId($request);
         if ($userId === null) {
             return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$billingAccess->hasProAccess($userId)) {
+            return $this->jsonError('plan_required', 'Pro plan required for Google Calendar integration.', 403);
         }
 
         $integrations->delete($userId, 'google_calendar');

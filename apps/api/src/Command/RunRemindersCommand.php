@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Application\Reminders\ReminderService;
+use App\Application\Billing\BillingAccessService;
 use App\Domain\Repository\UserRepositoryInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -16,7 +17,8 @@ final class RunRemindersCommand extends Command
 {
     public function __construct(
         private ReminderService $reminders,
-        private UserRepositoryInterface $users
+        private UserRepositoryInterface $users,
+        private BillingAccessService $billingAccess
     ) {
         parent::__construct();
     }
@@ -27,7 +29,11 @@ final class RunRemindersCommand extends Command
         $total = 0;
 
         foreach ($rows as $user) {
-            $total += $this->reminders->runForUser((int) $user['id']);
+            $userId = (int) $user['id'];
+            if (!$this->billingAccess->hasProAccess($userId)) {
+                continue;
+            }
+            $total += $this->reminders->runForUser($userId);
         }
 
         $output->writeln(sprintf('Created %d reminder follow-ups.', $total));

@@ -7,6 +7,7 @@ import {
   fetchFollowUps,
   fetchInvoiceDrafts,
   fetchPackages,
+  fetchPayPalStatus,
   logWorkEventFromCalendar,
   markFollowUpDone,
   reopenFollowUp,
@@ -33,6 +34,12 @@ export function TodayPage() {
     queryKey: ['clients', 'all'],
     queryFn: () => fetchClients(),
   })
+  const billingStatusQuery = useQuery({
+    queryKey: ['billing-status', 'paypal'],
+    queryFn: fetchPayPalStatus,
+  })
+  const hasProAccess =
+    billingStatusQuery.data?.status === 'active' && billingStatusQuery.data?.plan === 'pro'
   const [packageClientId, setPackageClientId] = useState<number | null>(null)
   const [voiceClientId, setVoiceClientId] = useState<number | null>(null)
   const [voiceTranscript, setVoiceTranscript] = useState('')
@@ -62,6 +69,7 @@ export function TodayPage() {
   const suggestionsQuery = useQuery({
     queryKey: ['calendar-suggestions', suggestionFrom, suggestionTo],
     queryFn: () => fetchCalendarSuggestions({ from: suggestionFrom, to: suggestionTo }),
+    enabled: hasProAccess,
   })
 
   const packagesQuery = useQuery({
@@ -373,7 +381,9 @@ export function TodayPage() {
             <h3>Calendar suggestions</h3>
             <span className="chip">Google Calendar</span>
           </div>
-          {clientsQuery.data && clientsQuery.data.length > 0 ? (
+          {!hasProAccess ? (
+            <p className="muted">Upgrade to Pro to unlock Google Calendar suggestions.</p>
+          ) : clientsQuery.data && clientsQuery.data.length > 0 ? (
             <div className="stack">
               <label className="field">
                 <span>Default client</span>

@@ -245,7 +245,8 @@ export function LandingPage() {
           <ul className="list">
             <li><span>Unlimited Clients & Events</span><strong>✓</strong></li>
             <li><span>Automatic Invoice Drafting</span><strong>✓</strong></li>
-            <li><span>Smart Follow-up Queue</span><strong>✓</strong></li>
+            <li><span>Manual Reminders (run on demand)</span><strong>✓</strong></li>
+            <li><span>Basic Reporting Summary</span><strong>✓</strong></li>
             <li><span>Package & Credit Tracking</span><strong>✓</strong></li>
           </ul>
           <button className="button button--primary" onClick={() => navigate('/onboarding')}>
@@ -261,8 +262,9 @@ export function LandingPage() {
           <ul className="list">
             <li><span>Unlimited Clients & Events</span><strong>✓</strong></li>
             <li><span>Automatic Invoice Drafting</span><strong>✓</strong></li>
-            <li><span>Smart Follow-up Queue</span><strong>✓</strong></li>
-            <li><span>Package & Credit Tracking</span><strong>✓</strong></li>
+            <li><span>Google Calendar Sync</span><strong>✓</strong></li>
+            <li><span>Automated Reminders</span><strong>✓</strong></li>
+            <li><span>Reporting Dashboard + CSV Export</span><strong>✓</strong></li>
           </ul>
           <button className="button button--ghost" onClick={() => navigate('/onboarding')}>
             Start Pro

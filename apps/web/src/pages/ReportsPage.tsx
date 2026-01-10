@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchClients, fetchReportSummary } from '../api/client'
+import { fetchClients, fetchPayPalStatus, fetchReportSummary } from '../api/client'
 
 const toDateInput = (date: Date) => date.toISOString().slice(0, 10)
 
@@ -16,6 +16,14 @@ export function ReportsPage() {
     queryFn: () => fetchClients(),
   })
 
+  const billingStatusQuery = useQuery({
+    queryKey: ['billing-status', 'paypal'],
+    queryFn: fetchPayPalStatus,
+  })
+
+  const hasProAccess =
+    billingStatusQuery.data?.status === 'active' && billingStatusQuery.data?.plan === 'pro'
+
   const summaryQuery = useQuery({
     queryKey: ['reports-summary', from, to, clientId],
     queryFn: () =>
@@ -27,9 +35,11 @@ export function ReportsPage() {
   })
 
   const totals = summaryQuery.data
+  const summaryScope = totals?.scope ?? (hasProAccess ? 'full' : 'basic')
+  const showFullSummary = summaryScope === 'full'
 
   const invoiceCards = useMemo(() => {
-    if (!totals) {
+    if (!totals || !showFullSummary) {
       return []
     }
 
@@ -64,6 +74,24 @@ export function ReportsPage() {
       <section className="card">
         <div className="card-header">
           <h3>Filters</h3>
+          {showFullSummary ? (
+            <button
+              className="button button--ghost"
+              type="button"
+              onClick={() => {
+                const params = new URLSearchParams()
+                if (from) params.set('from', from)
+                if (to) params.set('to', to)
+                if (clientId !== 'all') params.set('clientId', clientId)
+                const suffix = params.toString() ? `?${params.toString()}` : ''
+                window.open(`/api/reports/export${suffix}`, '_blank', 'noopener')
+              }}
+            >
+              Export CSV
+            </button>
+          ) : (
+            <span className="chip">Starter</span>
+          )}
         </div>
         <div className="grid">
           <label className="field">
@@ -93,7 +121,39 @@ export function ReportsPage() {
         <p className="form-error">Could not load reporting summary.</p>
       ) : null}
 
-      {totals ? (
+      {totals && !showFullSummary ? (
+        <section className="grid">
+          <div className="card">
+            <div className="card-header">
+              <h3>Basic summary</h3>
+              <span className="chip">Starter</span>
+            </div>
+            <ul className="list">
+              <li>
+                <span>Total time</span>
+                <strong>{minutesToHours(totals.work_events.total_minutes)}h</strong>
+              </li>
+              <li>
+                <span>Total sessions</span>
+                <strong>{totals.work_events.total_sessions}</strong>
+              </li>
+              <li>
+                <span>Paid invoices</span>
+                <strong>{totals.invoice_totals.paid?.count ?? 0}</strong>
+              </li>
+              <li>
+                <span>Paid amount</span>
+                <strong>{formatAmounts(totals.invoice_totals.paid?.amounts ?? {})}</strong>
+              </li>
+            </ul>
+            <p className="muted">
+              Upgrade to Pro for full reporting breakdowns and CSV export.
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      {totals && showFullSummary ? (
         <>
           <section className="grid">
             <div className="card">
@@ -107,11 +167,11 @@ export function ReportsPage() {
                 </li>
                 <li>
                   <span>Billable time</span>
-                  <strong>{minutesToHours(totals.work_events.billable_minutes)}h</strong>
+                  <strong>{minutesToHours(totals.work_events.billable_minutes ?? 0)}h</strong>
                 </li>
                 <li>
                   <span>Non-billable time</span>
-                  <strong>{minutesToHours(totals.work_events.non_billable_minutes)}h</strong>
+                  <strong>{minutesToHours(totals.work_events.non_billable_minutes ?? 0)}h</strong>
                 </li>
                 <li>
                   <span>Total sessions</span>
@@ -119,11 +179,11 @@ export function ReportsPage() {
                 </li>
                 <li>
                   <span>Billable sessions</span>
-                  <strong>{totals.work_events.billable_sessions}</strong>
+                  <strong>{totals.work_events.billable_sessions ?? 0}</strong>
                 </li>
                 <li>
                   <span>Non-billable sessions</span>
-                  <strong>{totals.work_events.non_billable_sessions}</strong>
+                  <strong>{totals.work_events.non_billable_sessions ?? 0}</strong>
                 </li>
               </ul>
             </div>

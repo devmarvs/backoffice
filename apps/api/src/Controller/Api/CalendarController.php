@@ -7,6 +7,7 @@ namespace App\Controller\Api;
 use App\Domain\Repository\CalendarEventRepositoryInterface;
 use App\Domain\Repository\ClientRepositoryInterface;
 use App\Application\WorkEvent\WorkEventService;
+use App\Application\Billing\BillingAccessService;
 use App\Domain\Enum\WorkEventType;
 use DateTimeImmutable;
 use JsonException;
@@ -18,11 +19,19 @@ use Symfony\Component\Routing\Attribute\Route;
 final class CalendarController extends BaseApiController
 {
     #[Route('/events', methods: ['GET'])]
-    public function list(Request $request, CalendarEventRepositoryInterface $events): JsonResponse
+    public function list(
+        Request $request,
+        CalendarEventRepositoryInterface $events,
+        BillingAccessService $billingAccess
+    ): JsonResponse
     {
         $userId = $this->requireUserId($request);
         if ($userId === null) {
             return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$billingAccess->hasProAccess($userId)) {
+            return $this->jsonError('plan_required', 'Pro plan required for calendar sync.', 403);
         }
 
         $from = $request->query->get('from');
@@ -45,11 +54,19 @@ final class CalendarController extends BaseApiController
     }
 
     #[Route('/suggestions', methods: ['GET'])]
-    public function suggestions(Request $request, CalendarEventRepositoryInterface $events): JsonResponse
+    public function suggestions(
+        Request $request,
+        CalendarEventRepositoryInterface $events,
+        BillingAccessService $billingAccess
+    ): JsonResponse
     {
         $userId = $this->requireUserId($request);
         if ($userId === null) {
             return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$billingAccess->hasProAccess($userId)) {
+            return $this->jsonError('plan_required', 'Pro plan required for calendar sync.', 403);
         }
 
         $from = $request->query->get('from');
@@ -77,12 +94,17 @@ final class CalendarController extends BaseApiController
         CalendarEventRepositoryInterface $events,
         ClientRepositoryInterface $clients,
         WorkEventService $workEventService,
+        BillingAccessService $billingAccess,
         int $id
     ): JsonResponse
     {
         $userId = $this->requireUserId($request);
         if ($userId === null) {
             return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$billingAccess->hasProAccess($userId)) {
+            return $this->jsonError('plan_required', 'Pro plan required for calendar sync.', 403);
         }
 
         $event = $events->findById($userId, $id);

@@ -64,14 +64,17 @@ export function SettingsPage() {
     queryKey: ['referrals'],
     queryFn: fetchReferrals,
   })
+  const hasProAccess =
+    paypalStatusQuery.data?.status === 'active' && paypalStatusQuery.data?.plan === 'pro'
   const calendarQuery = useQuery({
     queryKey: ['calendar-events'],
     queryFn: () => fetchCalendarEvents({}),
-    enabled: showCalendar,
+    enabled: showCalendar && hasProAccess,
   })
   const googleStatusQuery = useQuery({
     queryKey: ['google-status'],
     queryFn: fetchGoogleStatus,
+    enabled: hasProAccess,
   })
   const auditQuery = useQuery({
     queryKey: ['audit-logs'],
@@ -388,6 +391,11 @@ export function SettingsPage() {
           <p className="muted">
             Generate payment reminder follow-ups for old drafts with one click.
           </p>
+          <p className="muted">
+            {hasProAccess
+              ? 'Automated reminders run daily for Pro plans.'
+              : 'Starter plans run reminders manually only.'}
+          </p>
           {settingsQuery.data?.last_reminder_run_at ? (
             <p className="muted">
               Last run: {new Date(settingsQuery.data.last_reminder_run_at).toLocaleString()}
@@ -558,49 +566,67 @@ export function SettingsPage() {
           </div>
           <div className="stack">
             <p className="muted">
-              Status: {googleStatusQuery.data?.connected ? 'connected' : 'not connected'}
+              Status:{' '}
+              {hasProAccess
+                ? googleStatusQuery.data?.connected
+                  ? 'connected'
+                  : 'not connected'
+                : 'Pro plan required'}
             </p>
-            {googleStatusQuery.data?.last_sync_at ? (
+            {hasProAccess && googleStatusQuery.data?.last_sync_at ? (
               <p className="muted">
                 Last sync: {new Date(googleStatusQuery.data.last_sync_at).toLocaleString()}
               </p>
             ) : null}
-            {googleStatusQuery.data?.synced_from && googleStatusQuery.data?.synced_to ? (
+            {hasProAccess &&
+            googleStatusQuery.data?.synced_from &&
+            googleStatusQuery.data?.synced_to ? (
               <p className="muted">
                 Window: {new Date(googleStatusQuery.data.synced_from).toLocaleDateString()} to{' '}
                 {new Date(googleStatusQuery.data.synced_to).toLocaleDateString()}
               </p>
             ) : null}
+            {!hasProAccess ? (
+              <p className="muted">
+                Upgrade to Pro to connect Google Calendar and keep events in sync.
+              </p>
+            ) : null}
             <button
               className="button button--ghost"
               type="button"
+              disabled={!hasProAccess || connectMutation.isPending}
               onClick={() => connectMutation.mutate()}
             >
-              Connect Google Calendar
+              {connectMutation.isPending ? 'Connecting...' : 'Connect Google Calendar'}
             </button>
             <button
               className="button button--ghost"
               type="button"
+              disabled={!hasProAccess || syncMutation.isPending}
               onClick={() => syncMutation.mutate()}
             >
-              Sync events
+              {syncMutation.isPending ? 'Syncing...' : 'Sync events'}
             </button>
             <button
               className="button button--ghost"
               type="button"
+              disabled={!hasProAccess || disconnectMutation.isPending}
               onClick={() => disconnectMutation.mutate()}
             >
-              Disconnect
+              {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
             </button>
             <button
               className="button button--ghost"
               type="button"
+              disabled={!hasProAccess}
               onClick={() => setShowCalendar((prev) => !prev)}
             >
               {showCalendar ? 'Hide events' : 'Show imported events'}
             </button>
-            {calendarQuery.isFetching ? <p className="muted">Loading events...</p> : null}
-            {showCalendar && calendarQuery.data ? (
+            {hasProAccess && calendarQuery.isFetching ? (
+              <p className="muted">Loading events...</p>
+            ) : null}
+            {hasProAccess && showCalendar && calendarQuery.data ? (
               <ul className="list">
                 {calendarQuery.data.slice(0, 5).map((event) => (
                   <li key={event.id}>

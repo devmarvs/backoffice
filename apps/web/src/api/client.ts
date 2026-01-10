@@ -132,14 +132,15 @@ export type GoogleIntegrationStatus = {
 }
 
 export type ReportSummary = {
+  scope?: 'basic' | 'full'
   invoice_totals: Record<string, { count: number; amounts: Record<string, number> }>
   work_events: {
     total_minutes: number
-    billable_minutes: number
-    non_billable_minutes: number
+    billable_minutes?: number
+    non_billable_minutes?: number
     total_sessions: number
-    billable_sessions: number
-    non_billable_sessions: number
+    billable_sessions?: number
+    non_billable_sessions?: number
   }
 }
 
