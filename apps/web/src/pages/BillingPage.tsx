@@ -2,13 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   bulkMarkInvoicesSent,
-  createPaymentLink,
   fetchClients,
   fetchInvoiceDrafts,
   fetchInvoiceDraftsBulk,
   markInvoicePaid,
   markInvoiceSent,
-  refreshPaymentLink,
   sendInvoiceEmail,
   voidInvoiceDraft,
 } from '../api/client'
@@ -88,26 +86,6 @@ export function BillingPage() {
     onError: (err) => setError(err instanceof Error ? err.message : 'Could not void invoice.'),
   })
 
-  const paymentLinkMutation = useMutation({
-    mutationFn: createPaymentLink,
-    onSuccess: (link) => {
-      window.open(link.url, '_blank', 'noopener')
-      setError(null)
-    },
-    onError: (err) =>
-      setError(err instanceof Error ? err.message : 'Could not create payment link.'),
-  })
-
-  const refreshLinkMutation = useMutation({
-    mutationFn: refreshPaymentLink,
-    onSuccess: (link) => {
-      window.open(link.url, '_blank', 'noopener')
-      setError(null)
-    },
-    onError: (err) =>
-      setError(err instanceof Error ? err.message : 'Could not refresh payment link.'),
-  })
-
   const bulkMarkMutation = useMutation({
     mutationFn: bulkMarkInvoicesSent,
     onSuccess: () => {
@@ -170,15 +148,10 @@ export function BillingPage() {
           <div className="table">
             {invoiceQuery.data.map((draft) => (
               <div key={draft.id} className="table-row">
-                <div>
-                  <div>
-                    {draft.status.toUpperCase()} #{draft.id} -{' '}
-                    {clientNameById.get(draft.client_id) ?? `Client ${draft.client_id}`}
-                  </div>
-                  <div className="muted">
-                    Link: {draft.payment_link_status ? draft.payment_link_status : 'none'}
-                  </div>
-                </div>
+                <span>
+                  {draft.status.toUpperCase()} #{draft.id} -{' '}
+                  {clientNameById.get(draft.client_id) ?? `Client ${draft.client_id}`}
+                </span>
                 <span>{draft.currency}</span>
                 <strong>{(draft.amount_cents / 100).toFixed(2)}</strong>
                 <div className="row-actions">
@@ -213,15 +186,6 @@ export function BillingPage() {
                     <button
                       className="button button--ghost"
                       type="button"
-                      onClick={() => paymentLinkMutation.mutate(draft.id)}
-                    >
-                      Payment link
-                    </button>
-                  ) : null}
-                  {draft.status !== 'paid' && draft.status !== 'void' ? (
-                    <button
-                      className="button button--ghost"
-                      type="button"
                       onClick={() => {
                         const subject = window.prompt('Email subject', `Invoice #${draft.id}`)
                         if (subject === null) {
@@ -239,15 +203,6 @@ export function BillingPage() {
                       }}
                     >
                       Send email
-                    </button>
-                  ) : null}
-                  {draft.status !== 'paid' && draft.status !== 'void' ? (
-                    <button
-                      className="button button--ghost"
-                      type="button"
-                      onClick={() => refreshLinkMutation.mutate(draft.id)}
-                    >
-                      Refresh link
                     </button>
                   ) : null}
                   {draft.status !== 'paid' && draft.status !== 'void' ? (

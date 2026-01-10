@@ -7,11 +7,9 @@ namespace App\Controller\Api;
 use App\Application\Billing\InvoicePdfRenderer;
 use App\Domain\Repository\AuditLogRepositoryInterface;
 use App\Infrastructure\Mail\SimpleMailer;
-use App\Infrastructure\Billing\StripeBillingService;
 use App\Domain\Enum\InvoiceDraftStatus;
 use App\Domain\Repository\ClientRepositoryInterface;
 use App\Domain\Repository\InvoiceDraftRepositoryInterface;
-use App\Domain\Repository\PaymentLinkRepositoryInterface;
 use DateTimeImmutable;
 use JsonException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -39,7 +37,7 @@ final class InvoiceDraftController extends BaseApiController
 
         $rows = $drafts->listByStatus($userId, (string) $status);
         $rows = array_map(
-            fn (array $row) => $this->normalizeDates($row, ['created_at', 'updated_at', 'payment_link_updated_at']),
+            fn (array $row) => $this->normalizeDates($row, ['created_at', 'updated_at']),
             $rows
         );
 
@@ -127,7 +125,6 @@ final class InvoiceDraftController extends BaseApiController
     public function markPaid(
         Request $request,
         InvoiceDraftRepositoryInterface $drafts,
-        PaymentLinkRepositoryInterface $links,
         AuditLogRepositoryInterface $auditLogs,
         int $id
     ): JsonResponse
@@ -142,7 +139,6 @@ final class InvoiceDraftController extends BaseApiController
             return $this->jsonError('not_found', 'Invoice draft not found.', 404);
         }
 
-        $links->deactivateByInvoiceDraft($id);
         $auditLogs->add($userId, 'invoice.paid', 'invoice_draft', $id, ['status' => InvoiceDraftStatus::Paid->value]);
 
         $draft = $this->normalizeDates($draft, ['created_at', 'updated_at']);
@@ -179,7 +175,6 @@ final class InvoiceDraftController extends BaseApiController
     public function void(
         Request $request,
         InvoiceDraftRepositoryInterface $drafts,
-        PaymentLinkRepositoryInterface $links,
         AuditLogRepositoryInterface $auditLogs,
         int $id
     ): JsonResponse
@@ -206,7 +201,6 @@ final class InvoiceDraftController extends BaseApiController
             return $this->jsonError('not_found', 'Invoice draft not found.', 404);
         }
 
-        $links->deactivateByInvoiceDraft($id);
         $auditLogs->add($userId, 'invoice.voided', 'invoice_draft', $id, ['status' => InvoiceDraftStatus::Void->value]);
 
         $draft = $this->normalizeDates($draft, ['created_at', 'updated_at']);
@@ -383,103 +377,4 @@ final class InvoiceDraftController extends BaseApiController
         return $this->jsonSuccess(['updated' => $updated]);
     }
 
-    #[Route('/{id}/payment-link', methods: ['POST'])]
-    public function paymentLink(
-        Request $request,
-        InvoiceDraftRepositoryInterface $drafts,
-        PaymentLinkRepositoryInterface $links,
-        StripeBillingService $stripe,
-        int $id
-    ): JsonResponse {
-        $userId = $this->requireUserId($request);
-        if ($userId === null) {
-            return $this->jsonError('unauthorized', 'Authentication required.', 401);
-        }
-
-        if (!$stripe->isConfigured()) {
-            return $this->jsonError('not_configured', 'Stripe is not configured.', 409);
-        }
-
-        $draft = $drafts->findById($userId, $id);
-        if ($draft === null) {
-            return $this->jsonError('not_found', 'Invoice draft not found.', 404);
-        }
-
-        if (in_array($draft['status'] ?? null, [InvoiceDraftStatus::Paid->value, InvoiceDraftStatus::Void->value], true)) {
-            return $this->jsonError('invalid_status', 'Payment links are unavailable for paid or void invoices.', 409);
-        }
-
-        $existing = $links->findByInvoiceDraft((int) $draft['id']);
-        if ($existing !== null) {
-            return $this->jsonSuccess($existing);
-        }
-
-        $amountCents = (int) $draft['amount_cents'];
-        if ($amountCents <= 0) {
-            return $this->jsonError('invalid_amount', 'Invoice amount must be greater than 0.', 422);
-        }
-
-        $currency = (string) $draft['currency'];
-        $description = sprintf('Invoice draft #%d', (int) $draft['id']);
-        $paymentLink = $stripe->createPaymentLink($amountCents, $currency, $description);
-
-        $record = $links->create([
-            'invoice_draft_id' => (int) $draft['id'],
-            'provider' => 'stripe',
-            'provider_id' => $paymentLink['id'],
-            'url' => $paymentLink['url'],
-            'status' => 'active',
-        ]);
-
-        return $this->jsonSuccess($record, 201);
-    }
-
-    #[Route('/{id}/payment-link/refresh', methods: ['POST'])]
-    public function refreshPaymentLink(
-        Request $request,
-        InvoiceDraftRepositoryInterface $drafts,
-        PaymentLinkRepositoryInterface $links,
-        StripeBillingService $stripe,
-        int $id
-    ): JsonResponse
-    {
-        $userId = $this->requireUserId($request);
-        if ($userId === null) {
-            return $this->jsonError('unauthorized', 'Authentication required.', 401);
-        }
-
-        if (!$stripe->isConfigured()) {
-            return $this->jsonError('not_configured', 'Stripe is not configured.', 409);
-        }
-
-        $draft = $drafts->findById($userId, $id);
-        if ($draft === null) {
-            return $this->jsonError('not_found', 'Invoice draft not found.', 404);
-        }
-
-        if (in_array($draft['status'] ?? null, [InvoiceDraftStatus::Paid->value, InvoiceDraftStatus::Void->value], true)) {
-            return $this->jsonError('invalid_status', 'Payment links are unavailable for paid or void invoices.', 409);
-        }
-
-        $amountCents = (int) $draft['amount_cents'];
-        if ($amountCents <= 0) {
-            return $this->jsonError('invalid_amount', 'Invoice amount must be greater than 0.', 422);
-        }
-
-        $links->deactivateByInvoiceDraft((int) $draft['id']);
-
-        $currency = (string) $draft['currency'];
-        $description = sprintf('Invoice draft #%d', (int) $draft['id']);
-        $paymentLink = $stripe->createPaymentLink($amountCents, $currency, $description);
-
-        $record = $links->create([
-            'invoice_draft_id' => (int) $draft['id'],
-            'provider' => 'stripe',
-            'provider_id' => $paymentLink['id'],
-            'url' => $paymentLink['url'],
-            'status' => 'active',
-        ]);
-
-        return $this->jsonSuccess($record, 201);
-    }
 }

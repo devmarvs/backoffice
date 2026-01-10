@@ -238,9 +238,9 @@ export function LandingPage() {
       <section className="landing-pricing">
         <div className="card pricing-card text-center">
           <div>
-            <p className="eyebrow">Simple Pricing</p>
-            <h2>$29/mo</h2>
-            <p className="muted">Everything you need to run your back office on autopilot.</p>
+            <p className="eyebrow">Starter</p>
+            <h2>$10/mo</h2>
+            <p className="muted">Core autopilot features for solo tutors getting started.</p>
           </div>
           <ul className="list">
             <li><span>Unlimited Clients & Events</span><strong>✓</strong></li>
@@ -249,7 +249,23 @@ export function LandingPage() {
             <li><span>Package & Credit Tracking</span><strong>✓</strong></li>
           </ul>
           <button className="button button--primary" onClick={() => navigate('/onboarding')}>
-            Get Started Now
+            Start Starter
+          </button>
+        </div>
+        <div className="card pricing-card text-center">
+          <div>
+            <p className="eyebrow">Pro</p>
+            <h2>$29/mo</h2>
+            <p className="muted">Everything in Starter plus room to scale your practice.</p>
+          </div>
+          <ul className="list">
+            <li><span>Unlimited Clients & Events</span><strong>✓</strong></li>
+            <li><span>Automatic Invoice Drafting</span><strong>✓</strong></li>
+            <li><span>Smart Follow-up Queue</span><strong>✓</strong></li>
+            <li><span>Package & Credit Tracking</span><strong>✓</strong></li>
+          </ul>
+          <button className="button button--ghost" onClick={() => navigate('/onboarding')}>
+            Start Pro
           </button>
         </div>
       </section>

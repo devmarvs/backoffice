@@ -69,25 +69,22 @@ The Vite dev server proxies `/api` to the API container. Open:
 
 ## Optional integrations
 
-Stripe checkout (subscriptions + payment links):
-
-- `STRIPE_SECRET_KEY`
-- `STRIPE_PRICE_ID`
-- `STRIPE_SUCCESS_URL`
-- `STRIPE_CANCEL_URL`
-- `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_PORTAL_RETURN_URL`
-
-PayPal subscriptions:
+PayPal subscriptions (cards supported by PayPal checkout):
 
 - `PAYPAL_CLIENT_ID`
 - `PAYPAL_CLIENT_SECRET`
-- `PAYPAL_PLAN_ID`
+- `PAYPAL_PLAN_ID` (fallback plan id)
+- `PAYPAL_PLAN_ID_STARTER` (starter plan)
+- `PAYPAL_PLAN_ID_PRO` (pro plan)
 - `PAYPAL_ENV` (`sandbox` or `live`)
 - `PAYPAL_SUCCESS_URL`
 - `PAYPAL_CANCEL_URL`
 - `PAYPAL_MANAGE_URL` (optional: defaults to the PayPal autopay page)
 - `PAYPAL_BRAND_NAME` (optional)
+
+Billing plans:
+
+- `BILLING_DEFAULT_PLAN` (`starter` or `pro`, default: `starter`)
 
 Google Calendar (read-only import):
 
@@ -135,7 +132,6 @@ Note: `MAIL_TRANSPORT=mail` uses PHP's `mail()` function. In Docker, configure a
 - `POST /api/invoice-drafts/{id}/mark-paid`
 - `POST /api/invoice-drafts/{id}/void`
 - `POST /api/invoice-drafts/{id}/email`
-- `POST /api/invoice-drafts/{id}/payment-link/refresh`
 - `GET /api/follow-ups?status=open`
 - `GET /api/follow-ups/export?status=&from=&to=`
 - `POST /api/follow-ups/{id}/done`

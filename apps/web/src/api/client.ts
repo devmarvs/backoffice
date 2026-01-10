@@ -73,9 +73,6 @@ export type InvoiceDraft = {
   status: string
   created_at: string
   updated_at: string
-  payment_link_url?: string | null
-  payment_link_status?: string | null
-  payment_link_updated_at?: string | null
 }
 
 export type InvoiceLine = {
@@ -152,21 +149,14 @@ export type MessageTemplate = {
   body: string
 }
 
+export type BillingPlan = 'starter' | 'pro'
+
 export type BillingStatus = {
   status: string
   current_period_end?: string | null
+  plan?: BillingPlan | null
 }
 
-export type PaymentLink = {
-  id: number
-  invoice_draft_id: number
-  provider: string
-  provider_id: string
-  url: string
-  status: string
-  created_at: string
-  updated_at: string
-}
 
 export type ReferralSummary = {
   code: {
@@ -362,18 +352,6 @@ export async function bulkMarkInvoicesSent(ids: number[]) {
   })
 }
 
-export async function createPaymentLink(id: number) {
-  return apiFetch<PaymentLink>(`/api/invoice-drafts/${id}/payment-link`, {
-    method: 'POST',
-  })
-}
-
-export async function refreshPaymentLink(id: number) {
-  return apiFetch<PaymentLink>(`/api/invoice-drafts/${id}/payment-link/refresh`, {
-    method: 'POST',
-  })
-}
-
 export async function fetchFollowUps(status = 'open') {
   return apiFetch<FollowUp[]>(`/api/follow-ups?status=${encodeURIComponent(status)}`)
 }
@@ -464,32 +442,21 @@ export async function runReminders() {
   return apiFetch<{ created: number }>(`/api/reminders/run`, { method: 'POST' })
 }
 
-export async function fetchBillingStatus() {
-  return apiFetch<BillingStatus>(`/api/billing/status`)
-}
-
-export async function startCheckout() {
-  return apiFetch<{ url: string; session_id: string }>(`/api/billing/checkout`, { method: 'POST' })
-}
-
-export async function startBillingPortal() {
-  return apiFetch<{ url: string }>(`/api/billing/portal`, { method: 'POST' })
-}
-
 export async function fetchPayPalStatus() {
   return apiFetch<BillingStatus>(`/api/billing/paypal/status`)
 }
 
-export async function startPayPalCheckout() {
+export async function startPayPalCheckout(plan?: BillingPlan) {
   return apiFetch<{ url: string; subscription_id: string }>(`/api/billing/paypal/checkout`, {
     method: 'POST',
+    body: JSON.stringify(plan ? { plan } : {}),
   })
 }
 
-export async function confirmPayPalSubscription(subscriptionId: string) {
+export async function confirmPayPalSubscription(subscriptionId: string, plan?: BillingPlan) {
   return apiFetch<BillingStatus>(`/api/billing/paypal/confirm`, {
     method: 'POST',
-    body: JSON.stringify({ subscription_id: subscriptionId }),
+    body: JSON.stringify(plan ? { subscription_id: subscriptionId, plan } : { subscription_id: subscriptionId }),
   })
 }
 

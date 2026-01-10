@@ -5,8 +5,8 @@ import {
   connectGoogle,
   confirmPayPalSubscription,
   disconnectGoogle,
+  type BillingPlan,
   fetchAuditLogs,
-  fetchBillingStatus,
   fetchGoogleStatus,
   fetchPayPalStatus,
   fetchCalendarEvents,
@@ -14,8 +14,6 @@ import {
   fetchSettings,
   fetchTemplates,
   runReminders,
-  startBillingPortal,
-  startCheckout,
   startPayPalCheckout,
   startPayPalManage,
   syncGoogleCalendar,
@@ -47,6 +45,8 @@ export function SettingsPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [showCalendar, setShowCalendar] = useState(false)
   const [handledPayPal, setHandledPayPal] = useState(false)
+  const [billingPlan, setBillingPlan] = useState<BillingPlan>('starter')
+  const [billingPlanTouched, setBillingPlanTouched] = useState(false)
 
   const settingsQuery = useQuery({
     queryKey: ['settings'],
@@ -55,10 +55,6 @@ export function SettingsPage() {
   const templatesQuery = useQuery({
     queryKey: ['templates'],
     queryFn: fetchTemplates,
-  })
-  const billingQuery = useQuery({
-    queryKey: ['billing-status'],
-    queryFn: fetchBillingStatus,
   })
   const paypalStatusQuery = useQuery({
     queryKey: ['billing-status', 'paypal'],
@@ -81,6 +77,14 @@ export function SettingsPage() {
     queryKey: ['audit-logs'],
     queryFn: () => fetchAuditLogs(10),
   })
+
+  const planFromSubscription = paypalStatusQuery.data?.plan ?? null
+
+  useEffect(() => {
+    if (!billingPlanTouched && planFromSubscription) {
+      setBillingPlan(planFromSubscription)
+    }
+  }, [billingPlanTouched, planFromSubscription])
 
   useEffect(() => {
     if (settingsQuery.data) {
@@ -157,30 +161,8 @@ export function SettingsPage() {
     },
   })
 
-  const checkoutMutation = useMutation({
-    mutationFn: startCheckout,
-    onSuccess: (result) => {
-      window.location.href = result.url
-    },
-    onError: (err) => {
-      setError(err instanceof Error ? err.message : 'Checkout is not configured yet.')
-      setSuccess(null)
-    },
-  })
-
-  const portalMutation = useMutation({
-    mutationFn: startBillingPortal,
-    onSuccess: (result) => {
-      window.location.href = result.url
-    },
-    onError: (err) => {
-      setError(err instanceof Error ? err.message : 'Billing portal is not available yet.')
-      setSuccess(null)
-    },
-  })
-
   const paypalCheckoutMutation = useMutation({
-    mutationFn: startPayPalCheckout,
+    mutationFn: () => startPayPalCheckout(billingPlan),
     onSuccess: (result) => {
       window.location.href = result.url
     },
@@ -202,7 +184,7 @@ export function SettingsPage() {
   })
 
   const paypalConfirmMutation = useMutation({
-    mutationFn: confirmPayPalSubscription,
+    mutationFn: (subscriptionId: string) => confirmPayPalSubscription(subscriptionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['billing-status', 'paypal'] })
       setSuccess('PayPal subscription confirmed.')
@@ -521,39 +503,29 @@ export function SettingsPage() {
             <h3>Billing</h3>
             <span className="chip">Providers</span>
           </div>
-          <div className="grid two-columns">
-            <div className="billing-provider">
-              <p className="eyebrow">Stripe</p>
-              <p className="muted">
-                Status: {billingQuery.data?.status ? billingQuery.data.status : 'unknown'}
-              </p>
-              {billingQuery.data?.current_period_end ? (
-                <p className="muted">
-                  Renews: {new Date(billingQuery.data.current_period_end).toLocaleDateString()}
-                </p>
-              ) : null}
-              <div className="stack">
-                <button
-                  className="button button--primary"
-                  type="button"
-                  onClick={() => checkoutMutation.mutate()}
-                >
-                  {checkoutMutation.isPending ? 'Redirecting...' : 'Start Stripe checkout'}
-                </button>
-                <button
-                  className="button button--ghost"
-                  type="button"
-                  onClick={() => portalMutation.mutate()}
-                >
-                  {portalMutation.isPending ? 'Opening...' : 'Manage subscription'}
-                </button>
-              </div>
-            </div>
+          <div className="stack">
+            <label className="field">
+              <span>Plan</span>
+              <select
+                value={billingPlan}
+                onChange={(event) => {
+                  setBillingPlan(event.target.value as BillingPlan)
+                  setBillingPlanTouched(true)
+                }}
+              >
+                <option value="starter">Starter ($10/mo)</option>
+                <option value="pro">Pro ($29/mo)</option>
+              </select>
+            </label>
+            <p className="muted">Choose a plan before starting checkout.</p>
+          </div>
+          <div className="grid">
             <div className="billing-provider">
               <p className="eyebrow">PayPal</p>
               <p className="muted">
                 Status: {paypalStatusQuery.data?.status ? paypalStatusQuery.data.status : 'unknown'}
               </p>
+              {paypalStatusQuery.data?.plan ? <p className="muted">Plan: {paypalStatusQuery.data.plan}</p> : null}
               {paypalStatusQuery.data?.current_period_end ? (
                 <p className="muted">
                   Renews: {new Date(paypalStatusQuery.data.current_period_end).toLocaleDateString()}

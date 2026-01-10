@@ -4,16 +4,9 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
-use App\Domain\Repository\AuditLogRepositoryInterface;
+use App\Application\Billing\BillingPlanResolver;
 use App\Domain\Repository\BillingSubscriptionRepositoryInterface;
-use App\Domain\Repository\BillingWebhookEventRepositoryInterface;
-use App\Domain\Repository\InvoiceDraftRepositoryInterface;
-use App\Domain\Repository\PaymentLinkRepositoryInterface;
-use App\Domain\Repository\UserRepositoryInterface;
 use App\Infrastructure\Billing\PayPalBillingService;
-use App\Infrastructure\Billing\StripeBillingService;
-use App\Domain\Enum\InvoiceDraftStatus;
-use DateTimeImmutable;
 use JsonException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,121 +18,47 @@ final class BillingController extends BaseApiController
     #[Route('/checkout', methods: ['POST'])]
     public function checkout(
         Request $request,
-        StripeBillingService $stripe,
-        UserRepositoryInterface $users,
-        BillingSubscriptionRepositoryInterface $subscriptions
+        PayPalBillingService $paypal,
+        BillingSubscriptionRepositoryInterface $subscriptions,
+        BillingPlanResolver $plans
     ): JsonResponse {
-        $userId = $this->requireUserId($request);
-        if ($userId === null) {
-            return $this->jsonError('unauthorized', 'Authentication required.', 401);
-        }
-
-        if (!$stripe->isConfigured()) {
-            return $this->jsonError('not_configured', 'Stripe is not configured.', 409);
-        }
-
-        $user = $users->findById($userId);
-        if ($user === null) {
-            return $this->jsonError('not_found', 'User not found.', 404);
-        }
-
-        $session = $stripe->createCheckoutSession($userId, (string) $user['email']);
-        $subscriptions->upsert($userId, 'stripe', [
-            'status' => 'pending',
-        ]);
-
-        return $this->jsonSuccess(['url' => $session['url'], 'session_id' => $session['id']]);
+        return $this->handlePaypalCheckout($request, $paypal, $subscriptions, $plans);
     }
 
     #[Route('/status', methods: ['GET'])]
     public function status(Request $request, BillingSubscriptionRepositoryInterface $subscriptions): JsonResponse
     {
-        $userId = $this->requireUserId($request);
-        if ($userId === null) {
-            return $this->jsonError('unauthorized', 'Authentication required.', 401);
-        }
-
-        $subscription = $subscriptions->findByUser($userId, 'stripe');
-        if ($subscription !== null) {
-            $subscription = $this->normalizeDates($subscription, ['created_at', 'updated_at', 'current_period_end']);
-        }
-
-        return $this->jsonSuccess($subscription ?? ['status' => 'inactive']);
+        return $this->handleStatus($request, $subscriptions);
     }
 
     #[Route('/portal', methods: ['POST'])]
-    public function portal(
-        Request $request,
-        StripeBillingService $stripe,
-        BillingSubscriptionRepositoryInterface $subscriptions
-    ): JsonResponse {
-        $userId = $this->requireUserId($request);
-        if ($userId === null) {
-            return $this->jsonError('unauthorized', 'Authentication required.', 401);
-        }
-
-        if (!$stripe->isPortalConfigured()) {
-            return $this->jsonError('not_configured', 'Stripe billing portal is not configured.', 409);
-        }
-
-        $subscription = $subscriptions->findByUser($userId, 'stripe');
-        $customerId = $subscription['customer_id'] ?? null;
-        if ($customerId === null || $customerId === '') {
-            return $this->jsonError('no_customer', 'No Stripe customer is linked yet.', 409);
-        }
-
-        $session = $stripe->createPortalSession((string) $customerId);
-
-        return $this->jsonSuccess(['url' => $session['url']]);
+    public function portal(Request $request, PayPalBillingService $paypal): JsonResponse
+    {
+        return $this->handleManage($request, $paypal);
     }
 
     #[Route('/paypal/checkout', methods: ['POST'])]
     public function paypalCheckout(
         Request $request,
         PayPalBillingService $paypal,
-        BillingSubscriptionRepositoryInterface $subscriptions
+        BillingSubscriptionRepositoryInterface $subscriptions,
+        BillingPlanResolver $plans
     ): JsonResponse {
-        $userId = $this->requireUserId($request);
-        if ($userId === null) {
-            return $this->jsonError('unauthorized', 'Authentication required.', 401);
-        }
-
-        if (!$paypal->isConfigured()) {
-            return $this->jsonError('not_configured', 'PayPal is not configured.', 409);
-        }
-
-        $session = $paypal->createSubscription($userId);
-        $subscriptions->upsert($userId, 'paypal', [
-            'subscription_id' => $session['id'],
-            'status' => 'pending',
-        ]);
-
-        return $this->jsonSuccess(['url' => $session['approve_url'], 'subscription_id' => $session['id']]);
+        return $this->handlePaypalCheckout($request, $paypal, $subscriptions, $plans);
     }
 
     #[Route('/paypal/status', methods: ['GET'])]
-    public function paypalStatus(
-        Request $request,
-        BillingSubscriptionRepositoryInterface $subscriptions
-    ): JsonResponse {
-        $userId = $this->requireUserId($request);
-        if ($userId === null) {
-            return $this->jsonError('unauthorized', 'Authentication required.', 401);
-        }
-
-        $subscription = $subscriptions->findByUser($userId, 'paypal');
-        if ($subscription !== null) {
-            $subscription = $this->normalizeDates($subscription, ['created_at', 'updated_at', 'current_period_end']);
-        }
-
-        return $this->jsonSuccess($subscription ?? ['status' => 'inactive']);
+    public function paypalStatus(Request $request, BillingSubscriptionRepositoryInterface $subscriptions): JsonResponse
+    {
+        return $this->handleStatus($request, $subscriptions);
     }
 
     #[Route('/paypal/confirm', methods: ['POST'])]
     public function paypalConfirm(
         Request $request,
         PayPalBillingService $paypal,
-        BillingSubscriptionRepositoryInterface $subscriptions
+        BillingSubscriptionRepositoryInterface $subscriptions,
+        BillingPlanResolver $plans
     ): JsonResponse {
         $userId = $this->requireUserId($request);
         if ($userId === null) {
@@ -161,6 +80,18 @@ final class BillingController extends BaseApiController
             return $this->jsonError('not_configured', 'PayPal is not configured.', 409);
         }
 
+        $existing = $subscriptions->findByUser($userId, 'paypal');
+        $planValue = $this->resolvePlanValue(
+            $plans,
+            isset($payload['plan']) ? (string) $payload['plan'] : null,
+            $existing['plan'] ?? null,
+            true,
+            true
+        );
+        if ($planValue === null) {
+            return $this->jsonError('invalid_plan', 'Plan is invalid.', 422);
+        }
+
         $data = $paypal->getSubscription($subscriptionId);
         $status = strtolower((string) ($data['status'] ?? 'pending'));
         $payerId = $data['subscriber']['payer_id'] ?? null;
@@ -171,6 +102,7 @@ final class BillingController extends BaseApiController
             'subscription_id' => $subscriptionId,
             'status' => $status,
             'current_period_end' => $nextBilling,
+            'plan' => $planValue,
         ]);
 
         $row = $this->normalizeDates($row, ['created_at', 'updated_at', 'current_period_end']);
@@ -179,10 +111,70 @@ final class BillingController extends BaseApiController
     }
 
     #[Route('/paypal/manage', methods: ['POST'])]
-    public function paypalManage(
+    public function paypalManage(Request $request, PayPalBillingService $paypal): JsonResponse
+    {
+        return $this->handleManage($request, $paypal);
+    }
+
+    private function handlePaypalCheckout(
         Request $request,
-        PayPalBillingService $paypal
+        PayPalBillingService $paypal,
+        BillingSubscriptionRepositoryInterface $subscriptions,
+        BillingPlanResolver $plans
     ): JsonResponse {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        if (!$paypal->isConfigured()) {
+            return $this->jsonError('not_configured', 'PayPal is not configured.', 409);
+        }
+
+        try {
+            $payload = $this->parseJson($request);
+        } catch (JsonException $exception) {
+            return $this->jsonError('invalid_json', $exception->getMessage(), 400);
+        }
+
+        $planValue = $this->resolvePlanValue($plans, $payload['plan'] ?? null, null, true, true);
+        if ($planValue === null) {
+            return $this->jsonError('invalid_plan', 'Plan is invalid.', 422);
+        }
+
+        if (!$paypal->isPlanConfigured($planValue)) {
+            return $this->jsonError('not_configured', 'PayPal plan is not configured for this plan.', 409);
+        }
+
+        $session = $paypal->createSubscription($userId, $planValue);
+        $subscriptions->upsert($userId, 'paypal', [
+            'subscription_id' => $session['id'],
+            'status' => 'pending',
+            'plan' => $planValue,
+        ]);
+
+        return $this->jsonSuccess(['url' => $session['approve_url'], 'subscription_id' => $session['id']]);
+    }
+
+    private function handleStatus(
+        Request $request,
+        BillingSubscriptionRepositoryInterface $subscriptions
+    ): JsonResponse {
+        $userId = $this->requireUserId($request);
+        if ($userId === null) {
+            return $this->jsonError('unauthorized', 'Authentication required.', 401);
+        }
+
+        $subscription = $subscriptions->findByUser($userId, 'paypal');
+        if ($subscription !== null) {
+            $subscription = $this->normalizeDates($subscription, ['created_at', 'updated_at', 'current_period_end']);
+        }
+
+        return $this->jsonSuccess($subscription ?? ['status' => 'inactive']);
+    }
+
+    private function handleManage(Request $request, PayPalBillingService $paypal): JsonResponse
+    {
         $userId = $this->requireUserId($request);
         if ($userId === null) {
             return $this->jsonError('unauthorized', 'Authentication required.', 401);
@@ -195,171 +187,31 @@ final class BillingController extends BaseApiController
         return $this->jsonSuccess(['url' => $paypal->getManageUrl()]);
     }
 
-    #[Route('/webhook', methods: ['POST'])]
-    public function webhook(
-        Request $request,
-        StripeBillingService $stripe,
-        BillingSubscriptionRepositoryInterface $subscriptions,
-        BillingWebhookEventRepositoryInterface $webhookEvents,
-        PaymentLinkRepositoryInterface $paymentLinks,
-        InvoiceDraftRepositoryInterface $drafts,
-        AuditLogRepositoryInterface $auditLogs
-    ): JsonResponse {
-        $payload = $request->getContent();
-        $signature = $request->headers->get('stripe-signature');
-
-        if ($signature === null) {
-            return $this->jsonError('missing_signature', 'Stripe signature header missing.', 400);
-        }
-
-        try {
-            $event = $stripe->constructEvent($payload, $signature);
-        } catch (\Throwable $exception) {
-            return $this->jsonError('invalid_signature', 'Stripe signature validation failed.', 400);
-        }
-
-        $type = $event->type ?? '';
-        $data = $event->data->object ?? null;
-
-        $eventId = $event->id ?? null;
-        if ($eventId === null || $eventId === '') {
-            return $this->jsonError('invalid_event', 'Stripe event id is missing.', 400);
-        }
-
-        $payloadData = json_decode($payload, true);
-        if (!is_array($payloadData)) {
-            $payloadData = [];
-        }
-
-        $webhookEvents->createIfNotExists('stripe', (string) $eventId, (string) $type, $payloadData);
-        if (!$webhookEvents->markProcessing('stripe', (string) $eventId)) {
-            return $this->jsonSuccess(['received' => true, 'duplicate' => true]);
-        }
-
-        try {
-            if ($type === 'checkout.session.completed' && $data !== null) {
-                $userId = isset($data->client_reference_id) ? (int) $data->client_reference_id : null;
-                if ($userId !== null) {
-                    $subscriptions->upsert($userId, 'stripe', [
-                        'customer_id' => $data->customer ?? null,
-                        'subscription_id' => $data->subscription ?? null,
-                        'status' => 'active',
-                        'current_period_end' => null,
-                    ]);
-                }
-
-                if (isset($data->payment_link) && $data->payment_link !== null) {
-                    $link = $paymentLinks->findWithInvoiceByProviderId('stripe', (string) $data->payment_link);
-                    if ($link !== null) {
-                        if (($link['status'] ?? '') !== 'paid') {
-                            $paymentLinks->updateStatus((int) $link['id'], 'paid');
-                        }
-
-                        $invoiceStatus = $link['invoice_status'] ?? null;
-                        if (!in_array($invoiceStatus, [InvoiceDraftStatus::Paid->value, InvoiceDraftStatus::Void->value], true)) {
-                            $updated = $drafts->updateStatus((int) $link['user_id'], (int) $link['invoice_draft_id'], InvoiceDraftStatus::Paid->value);
-                            if ($updated !== null) {
-                                $auditLogs->add(
-                                    (int) $link['user_id'],
-                                    'invoice.paid',
-                                    'invoice_draft',
-                                    (int) $link['invoice_draft_id'],
-                                    ['source' => 'stripe_payment_link']
-                                );
-                            }
-                        }
-                    }
-                }
+    private function resolvePlanValue(
+        BillingPlanResolver $plans,
+        ?string $requestedPlan,
+        ?string $fallbackPlan,
+        bool $useDefault,
+        bool $strictRequested
+    ): ?string {
+        if ($requestedPlan !== null && trim($requestedPlan) !== '') {
+            $resolved = $plans->resolve($requestedPlan);
+            if ($resolved !== null) {
+                return $resolved->value;
             }
 
-            if (in_array($type, ['checkout.session.async_payment_failed', 'payment_intent.payment_failed', 'payment_intent.canceled'], true)) {
-                $paymentLinkId = $data->payment_link ?? null;
-                if ($paymentLinkId) {
-                    $this->updatePaymentLinkStatus((string) $paymentLinkId, 'failed', $paymentLinks, $auditLogs);
-                }
+            if ($strictRequested) {
+                return null;
             }
-
-            if (in_array($type, ['charge.refunded', 'charge.refund.updated'], true)) {
-                $paymentLinkId = $data->payment_link ?? null;
-                if ($paymentLinkId) {
-                    $link = $this->updatePaymentLinkStatus((string) $paymentLinkId, 'refunded', $paymentLinks, $auditLogs);
-                    if ($link !== null) {
-                        $auditLogs->add(
-                            (int) $link['user_id'],
-                            'invoice.refunded',
-                            'invoice_draft',
-                            (int) $link['invoice_draft_id'],
-                            ['source' => 'stripe']
-                        );
-                    }
-                }
-            }
-
-            if ($type === 'charge.dispute.created') {
-                $paymentLinkId = $data->payment_link ?? null;
-                if ($paymentLinkId) {
-                    $link = $this->updatePaymentLinkStatus((string) $paymentLinkId, 'disputed', $paymentLinks, $auditLogs);
-                    if ($link !== null) {
-                        $auditLogs->add(
-                            (int) $link['user_id'],
-                            'invoice.disputed',
-                            'invoice_draft',
-                            (int) $link['invoice_draft_id'],
-                            ['source' => 'stripe']
-                        );
-                    }
-                }
-            }
-
-            if ($type === 'customer.subscription.updated' || $type === 'customer.subscription.deleted') {
-                if ($data !== null && isset($data->id)) {
-                    $record = $subscriptions->findBySubscriptionId('stripe', (string) $data->id);
-                    if ($record !== null) {
-                        $currentPeriodEnd = null;
-                        if (isset($data->current_period_end)) {
-                            $currentPeriodEnd = (new DateTimeImmutable())->setTimestamp((int) $data->current_period_end)->format('Y-m-d H:i:sP');
-                        }
-
-                        $subscriptions->upsert((int) $record['user_id'], 'stripe', [
-                            'customer_id' => $data->customer ?? null,
-                            'subscription_id' => (string) $data->id,
-                            'status' => $type === 'customer.subscription.deleted' ? 'canceled' : (string) $data->status,
-                            'current_period_end' => $currentPeriodEnd,
-                        ]);
-                    }
-                }
-            }
-
-            $webhookEvents->markProcessed('stripe', (string) $eventId);
-        } catch (\Throwable $exception) {
-            $webhookEvents->markFailed('stripe', (string) $eventId, $exception->getMessage());
-
-            return $this->jsonError('processing_failed', 'Stripe webhook processing failed.', 500);
         }
 
-        return $this->jsonSuccess(['received' => true]);
-    }
-
-    private function updatePaymentLinkStatus(
-        string $providerId,
-        string $status,
-        PaymentLinkRepositoryInterface $paymentLinks,
-        AuditLogRepositoryInterface $auditLogs
-    ): ?array {
-        $link = $paymentLinks->findWithInvoiceByProviderId('stripe', $providerId);
-        if ($link === null) {
-            return null;
+        if ($fallbackPlan !== null && trim($fallbackPlan) !== '') {
+            $fallback = $plans->resolve($fallbackPlan);
+            if ($fallback !== null) {
+                return $fallback->value;
+            }
         }
 
-        $paymentLinks->updateStatus((int) $link['id'], $status);
-        $auditLogs->add(
-            (int) $link['user_id'],
-            'payment_link.' . $status,
-            'payment_link',
-            (int) $link['id'],
-            ['invoice_draft_id' => (int) $link['invoice_draft_id']]
-        );
-
-        return $link;
+        return $useDefault ? $plans->resolve(null)?->value : null;
     }
 }

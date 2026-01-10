@@ -16,6 +16,8 @@ final class PayPalBillingService
         #[Autowire('%app.paypal_client_id%')] private string $clientId,
         #[Autowire('%app.paypal_client_secret%')] private string $clientSecret,
         #[Autowire('%app.paypal_plan_id%')] private string $planId,
+        #[Autowire('%app.paypal_plan_id_starter%')] private string $planIdStarter,
+        #[Autowire('%app.paypal_plan_id_pro%')] private string $planIdPro,
         #[Autowire('%app.paypal_success_url%')] private string $successUrl,
         #[Autowire('%app.paypal_cancel_url%')] private string $cancelUrl,
         #[Autowire('%app.paypal_environment%')] private string $environment,
@@ -26,7 +28,12 @@ final class PayPalBillingService
 
     public function isConfigured(): bool
     {
-        return $this->clientId !== '' && $this->clientSecret !== '' && $this->planId !== '';
+        return $this->clientId !== '' && $this->clientSecret !== '' && $this->hasAnyPlanId();
+    }
+
+    public function isPlanConfigured(string $plan): bool
+    {
+        return $this->resolvePlanId($plan) !== null;
     }
 
     public function isManageConfigured(): bool
@@ -43,14 +50,19 @@ final class PayPalBillingService
         return $this->isLive() ? 'https://www.paypal.com/myaccount/autopay/' : 'https://www.sandbox.paypal.com/myaccount/autopay/';
     }
 
-    public function createSubscription(int $userId): array
+    public function createSubscription(int $userId, string $plan): array
     {
         if (!$this->isConfigured()) {
             throw new \RuntimeException('PayPal is not configured.');
         }
 
+        $planId = $this->resolvePlanId($plan);
+        if ($planId === null) {
+            throw new \RuntimeException('PayPal plan is not configured for this plan.');
+        }
+
         $payload = [
-            'plan_id' => $this->planId,
+            'plan_id' => $planId,
             'custom_id' => (string) $userId,
             'application_context' => [
                 'brand_name' => $this->brandName !== '' ? $this->brandName : self::DEFAULT_BRAND,
@@ -165,5 +177,23 @@ final class PayPalBillingService
     private function isLive(): bool
     {
         return strtolower($this->environment) === 'live';
+    }
+
+    private function resolvePlanId(string $plan): ?string
+    {
+        $plan = strtolower(trim($plan));
+        if ($plan === 'starter' && $this->planIdStarter !== '') {
+            return $this->planIdStarter;
+        }
+        if ($plan === 'pro' && $this->planIdPro !== '') {
+            return $this->planIdPro;
+        }
+
+        return $this->planId !== '' ? $this->planId : null;
+    }
+
+    private function hasAnyPlanId(): bool
+    {
+        return $this->planId !== '' || $this->planIdStarter !== '' || $this->planIdPro !== '';
     }
 }
